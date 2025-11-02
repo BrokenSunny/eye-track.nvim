@@ -1,7 +1,7 @@
 local M = {}
 
 --- @class EyeTrack.Core.Register
---- @field callback fun()
+--- @field matched? fun(any)
 --- @field line number
 --- @field virt_win_col number
 --- @field hidden_next_key? boolean | fun():boolean|nil

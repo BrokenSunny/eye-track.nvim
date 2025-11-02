@@ -7,14 +7,15 @@ local function main(options)
   local virt_win_col = vim.fn.virtcol(".") - leftcol - 1
   local cursor = vim.api.nvim_win_get_cursor(0)
 
+  --- @type table<EyeTrack.Core.Register>
   local registers = {}
   for i = topline, botline do
     if i ~= cursor[1] then
       table.insert(registers, {
         line = i - 1,
         virt_win_col = virt_win_col,
-        callback = function()
-          options.callback({
+        matched = function()
+          options.matched({
             offset = cursor[1] - i,
             row = i,
             col = cursor[2],

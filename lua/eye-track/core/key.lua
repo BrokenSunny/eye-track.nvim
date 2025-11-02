@@ -196,7 +196,7 @@ function M:_register(node, options)
       transfer()
       return
     end
-    local leaf = self:register_leaf(node, get_random_key(node), options.callback)
+    local leaf = self:register_leaf(node, get_random_key(node), options.matched)
     leaf.line = options.line
     leaf.virt_win_col = options.virt_win_col
     leaf.text = leaf.key
