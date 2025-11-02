@@ -1,12 +1,6 @@
 local M = {}
 local KEYS = "abcdefghijklmnopqrstuvwxyz"
 
---- @class EyeTrack.Key.RegisterOptions
---- @field callback fun()
---- @field line number
---- @field virt_win_col number
---- @field hidden_next_key? boolean | fun():boolean|nil
-
 local function get_leaf_ancestor_list(leaf, root)
   local ancestor_list = {}
   local node = leaf
@@ -97,16 +91,23 @@ function M:clear_ns_id(opts)
   end
 end
 
-function M:listen(opts)
-  opts = opts or {}
+--- @param options? EyeTrack.Core.Options
+function M:listen(options)
+  options = options or {}
   vim.schedule(function()
     local char = vim.fn.nr2char(vim.fn.getchar() --[[@as integer]])
 
     if not self.current_keys or self.current_keys[char] == nil then
       self:clear_ns_id()
+      if type(options.unmatched) == "function" then
+        options.unmatched()
+      end
       return
     end
     self.current_keys[char].callback()
+    if type(options.matched) == "function" then
+      options.matched()
+    end
   end)
 end
 
@@ -177,7 +178,7 @@ function M:register_node(node, key)
   return child_node
 end
 
---- @param options EyeTrack.Key.RegisterOptions
+--- @param options EyeTrack.Core.Register
 function M:_register(node, options)
   if not node then
     return
@@ -213,7 +214,7 @@ function M:_register(node, options)
   end
 end
 
---- @param options EyeTrack.Key.RegisterOptions
+--- @param options EyeTrack.Core.Register
 function M:register(options)
   self:_register(self.root, options)
 end
@@ -233,14 +234,15 @@ function M:init(total)
   self.current_keys = setmetatable(self.root.keys, { __index = self.root.keys["_"].keys })
 end
 
---- @param registers table<EyeTrack.Key.RegisterOptions>
-function M:main(registers)
-  self:init(#registers + 10)
+--- @param options EyeTrack.Core.Options
+function M:main(options)
+  local registers = options.reigsters
+  self:init(#registers)
   for _, value in ipairs(registers) do
     self:register(value)
   end
   highlight_nodes(self.root)
-  self:listen()
+  self:listen(options)
 end
 
 return M
