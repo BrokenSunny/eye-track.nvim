@@ -4,7 +4,7 @@ local KEYS = "abcdefghijklmnopqrstuvwxyz"
 --- @class EyeTrack.Key.RegisterOptions
 --- @field callback fun()
 --- @field line number
---- @field virt_col number
+--- @field virt_win_col number
 --- @field hidden_next_key? boolean | fun():boolean|nil
 
 local function get_leaf_ancestor_list(leaf, root)
@@ -24,10 +24,10 @@ end
 
 local function set_extmark(options)
   local line = options.line
-  local virt_col = options.virt_col
+  local virt_win_col = options.virt_win_col
   local ns_id = options.ns_id
   vim.api.nvim_buf_set_extmark(0, ns_id, line, 0, {
-    virt_text_win_col = virt_col,
+    virt_text_win_col = virt_win_col,
     virt_text = { { options.text, options.hl_group } },
   })
 end
@@ -38,7 +38,7 @@ local function highlight_node(leaf, root)
     if node then
       set_extmark({
         line = leaf.line,
-        virt_col = leaf.virt_col + i - 1,
+        virt_win_col = leaf.virt_win_col + i - 1,
         ns_id = node.parent.ns_id,
         hl_group = i == 1 and "EyeTrackKey" or "EyeTrackNextKey",
         text = node.key,
@@ -197,7 +197,7 @@ function M:_register(node, options)
     end
     local leaf = self:register_leaf(node, get_random_key(node), options.callback)
     leaf.line = options.line
-    leaf.virt_col = options.virt_col
+    leaf.virt_win_col = options.virt_win_col
     leaf.text = leaf.key
   else
     if node.current then
