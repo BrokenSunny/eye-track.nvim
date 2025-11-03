@@ -73,15 +73,18 @@ local function main(opts)
   })
   local registers = {}
   general_iter(matches, topline, botline, function(match)
-    table.insert(registers, opts.create(match))
+    local register = opts.register(match)
+    register.data = match
+    table.insert(registers, register)
   end)
   local clear = hightlight(topline, botline)
   require("eye-track.core").main({
-    reigsters = registers,
+    registers = registers,
     unmatched = function()
       clear()
     end,
-    matched = function()
+    matched = function(ctx)
+      opts.matched(ctx)
       clear()
     end,
   })

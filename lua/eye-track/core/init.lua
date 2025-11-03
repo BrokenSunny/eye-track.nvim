@@ -1,20 +1,19 @@
 local M = {}
 
 --- @class EyeTrack.Core.Register
---- @field matched? fun(any)
 --- @field line number
 --- @field virt_win_col number
---- @field hidden_next_key? boolean | fun():boolean|nil
+--- @field data? any
 
 --- @class EyeTrack.Core.Options
---- @field reigsters table<EyeTrack.Core.Register>
---- @field unmatched?fun(any)
---- @field matched? fun(any)
+--- @field registers table<EyeTrack.Core.Register>
+--- @field unmatched?fun(ctx: any)
+--- @field matched? fun(ctx: any)
 
 --- @class EyeTrack.Core.Active.Options
 --- @field root any
---- @field matched? fun(any)
---- @field unmatched? fun(any)
+--- @field matched? fun(ctx: any)
+--- @field unmatched? fun(ctx: any)
 
 vim.api.nvim_set_hl(0, "EyeTrackKey", {
   fg = "#ff007c",

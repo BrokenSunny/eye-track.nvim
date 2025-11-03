@@ -32,8 +32,8 @@ local function highlight_node(leaf, root)
   for i, node in ipairs(ancestor_list) do
     if node then
       set_extmark({
-        line = leaf.line,
-        virt_win_col = leaf.virt_win_col + i - 1,
+        line = leaf.data.line,
+        virt_win_col = leaf.data.virt_win_col + i - 1,
         ns_id = node.parent.ns_id,
         hl_group = i == 1 and "EyeTrackKey" or "EyeTrackNextKey",
         text = node.key,
@@ -154,8 +154,7 @@ function M:listen(options)
   local node = root.children[char]
 
   if node.level == 0 then
-    util.callback_option(options.matched)
-    node.callback()
+    util.callback_option(options.matched, node.data)
   else
     self:active({
       root = node,
@@ -165,7 +164,7 @@ function M:listen(options)
   end
 end
 
-function M:register_leaf(parent, key, callback)
+function M:register_leaf(parent, key)
   if not key then
     return
   end
@@ -173,9 +172,6 @@ function M:register_leaf(parent, key, callback)
     level = 0,
     key = key,
     parent = parent,
-    callback = function()
-      util.callback_option(callback, key)
-    end,
   }
   parent.children[key] = node
   parent.remain = parent.remain - 1
@@ -217,10 +213,13 @@ function M:_register(node, options)
       transfer()
       return
     end
-    local leaf = self:register_leaf(node, get_random_key(node), options.matched)
-    leaf.line = options.line
-    leaf.virt_win_col = options.virt_win_col
-    leaf.text = leaf.key
+    local leaf = self:register_leaf(node, get_random_key(node))
+    leaf.data = {
+      line = options.line,
+      virt_win_col = options.virt_win_col,
+      key = leaf.key,
+      data = options.data,
+    }
   else
     if node.current then
       self:_register(node.current, options)
@@ -258,7 +257,7 @@ end
 
 --- @param options EyeTrack.Core.Options
 function M:main(options)
-  local registers = options.reigsters
+  local registers = options.registers
   self:init(#registers)
   for _, value in ipairs(registers) do
     self:register(value)

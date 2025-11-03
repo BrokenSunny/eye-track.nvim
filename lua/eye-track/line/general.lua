@@ -14,17 +14,20 @@ local function main(options)
       table.insert(registers, {
         line = i - 1,
         virt_win_col = virt_win_col,
-        matched = function()
-          options.matched({
-            offset = cursor[1] - i,
-            row = i,
-            col = cursor[2],
-          })
-        end,
+        data = {
+          offset = cursor[1] - i,
+          row = i,
+          col = cursor[2],
+        },
       })
     end
   end
-  require("eye-track.core").main({ reigsters = registers })
+  require("eye-track.core").main({
+    registers = registers,
+    matched = function(ctx)
+      options.matched(ctx)
+    end,
+  })
 end
 
 return main
