@@ -1,5 +1,6 @@
 local M = {}
 local KEYS = "abcdefghijklmnopqrstuvwxyz"
+local util = require("eye-track.core.util")
 
 local function get_leaf_ancestor_list(leaf, root)
   local ancestor_list = {}
@@ -47,7 +48,7 @@ local function highlight_nodes(root)
       highlight_node(node, root)
       return
     end
-    for _, child in pairs(node.keys or {}) do
+    for _, child in pairs(node.children or {}) do
       run(child)
     end
   end
@@ -61,11 +62,45 @@ local function get_random_key(node)
 
   local random = math.random(26)
   local key = KEYS:sub(random, random)
-  if node.keys[key] == nil then
+  if node.children[key] == nil then
     return key
   end
 
   return get_random_key(node)
+end
+
+--- @return number
+--- @return number
+--- @return number
+local function compute(label_count, total)
+  --- @return number
+  --- @return number
+  --- @return number
+  local function compute_run(i)
+    local min = label_count * math.pow(26, i - 1)
+    local max = label_count * math.pow(26, i)
+
+    if total >= min and total <= max then
+      local remain = total - min
+      local quotient = math.ceil(remain / min)
+      local remainder = remain - (quotient * min)
+      local key_count = math.ceil((remainder + quotient) / min) + quotient
+      return i, label_count - key_count, key_count
+    elseif total > max then
+      return compute_run(i + 1)
+    end
+    return i, total, 0
+  end
+
+  return compute_run(1)
+end
+
+--- @param options EyeTrack.Core.Active.Options
+function M:active(options)
+  table.insert(self.state, options.root)
+  highlight_nodes(options.root)
+  vim.cmd.redraw()
+  self:listen(options)
 end
 
 function M:create_ns_id()
@@ -91,91 +126,77 @@ function M:clear_ns_id(opts)
   end
 end
 
---- @param options? EyeTrack.Core.Options
+--- @param options EyeTrack.Core.Active.Options
 function M:listen(options)
-  options = options or {}
-  vim.schedule(function()
-    local char = vim.fn.nr2char(vim.fn.getchar() --[[@as integer]])
+  local root = options.root
+  local c = vim.fn.getchar()
+  local key = vim.fn.keytrans(tostring(c)):lower()
+  local char = vim.fn.nr2char(c --[[@as integer]])
+  self:clear_ns_id()
 
-    if not self.current_keys or self.current_keys[char] == nil then
-      self:clear_ns_id()
-      if type(options.unmatched) == "function" then
-        options.unmatched()
-      end
+  if key == "<bs>" or char == " " then
+    local node = self.state[#self.state - 1]
+    if node then
+      self:active({
+        root = node,
+        unmatched = options.unmatched,
+        matched = options.matched,
+      })
       return
     end
-    self.current_keys[char].callback()
-    if type(options.matched) == "function" then
-      options.matched()
-    end
-  end)
-end
-
-local function compute(total)
-  --- @return number, number, number
-  local function compute_run(i)
-    local min = math.pow(26, i)
-    local max = math.pow(26, i + 1)
-
-    if total >= min and total <= max then
-      local remain = total - min
-      local quotient = math.ceil(remain / min)
-      local remainder = remain - (quotient * min)
-      local key_count = math.ceil((remainder + quotient) / min) + quotient
-      return i, 26 - key_count, key_count
-    elseif total > max then
-      return compute_run(i + 1)
-    end
-    return i, total, 0
   end
 
-  return compute_run(1)
-end
-
-function M:register_leaf(node, key, callback)
-  if not key then
+  if not root or root.children[char] == nil then
+    util.callback_option(options.unmatched)
     return
   end
 
-  local child_node = {
+  local node = root.children[char]
+
+  if node.level == 0 then
+    util.callback_option(options.matched)
+    node.callback()
+  else
+    self:active({
+      root = node,
+      matched = options.matched,
+      unmatched = options.unmatched,
+    })
+  end
+end
+
+function M:register_leaf(parent, key, callback)
+  if not key then
+    return
+  end
+  local node = {
     level = 0,
     key = key,
-    parent = node,
+    parent = parent,
     callback = function()
-      self:clear_ns_id()
-      if type(callback) == "function" then
-        callback(key)
-      end
+      util.callback_option(callback, key)
     end,
   }
-  node.keys[key] = child_node
-  node.remain = node.remain - 1
-  return child_node
+  parent.children[key] = node
+  parent.remain = parent.remain - 1
+  return node
 end
 
-function M:register_node(node, key)
+function M:register_node(parent, key)
   if not key then
     return
   end
-
-  local child_node = {
-    level = node.level - 1,
+  local node = {
+    level = parent.level - 1,
     key = key,
+    parent = parent,
     remain = 26,
-    keys = {},
+    children = {},
     ns_id = self:create_ns_id(),
-    parent = node,
   }
-  child_node.callback = function()
-    self.current_keys = child_node.keys
-    self:clear_ns_id()
-    highlight_nodes(child_node)
-    vim.cmd.redraw()
-    self:listen()
-  end
-  node.keys[key] = child_node
-  node.remain = node.remain - 1
-  return child_node
+  parent.children[key] = node
+  parent.remain = parent.remain - 1
+  return node
 end
 
 --- @param options EyeTrack.Core.Register
@@ -220,18 +241,19 @@ function M:register(options)
 end
 
 function M:init(total)
-  local level, remain1, remain2 = compute(total)
+  local level, remain1, remain2 = compute(26, total)
+  self.state = {}
   self.ns_ids = {}
   self.root = {
     level = level + 1,
     remain = remain2 + 1,
-    keys = {},
+    children = {},
     ns_id = self:create_ns_id(),
   }
   self.root.current = self:register_node(self.root, "_")
   self.root.current.key = nil
   self.root.current.remain = remain1
-  self.current_keys = setmetatable(self.root.keys, { __index = self.root.keys["_"].keys })
+  setmetatable(self.root.children, { __index = self.root.children["_"].children })
 end
 
 --- @param options EyeTrack.Core.Options
@@ -241,8 +263,11 @@ function M:main(options)
   for _, value in ipairs(registers) do
     self:register(value)
   end
-  highlight_nodes(self.root)
-  self:listen(options)
+  self:active({
+    root = self.root,
+    unmatched = options.unmatched,
+    matched = options.matched,
+  })
 end
 
 return M

@@ -11,6 +11,11 @@ local M = {}
 --- @field unmatched?fun(any)
 --- @field matched? fun(any)
 
+--- @class EyeTrack.Core.Active.Options
+--- @field root any
+--- @field matched? fun(any)
+--- @field unmatched? fun(any)
+
 vim.api.nvim_set_hl(0, "EyeTrackKey", {
   fg = "#ff007c",
   bold = true,
