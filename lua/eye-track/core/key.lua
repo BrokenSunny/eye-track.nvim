@@ -2,6 +2,14 @@ local M = {}
 local KEYS = "abcdefghijklmnopqrstuvwxyz"
 local util = require("eye-track.core.util")
 
+local default_config = {
+  label = {
+    position = function(relative, absolute)
+      return relative + 1
+    end,
+  },
+}
+
 local function get_leaf_ancestor_list(leaf, root)
   local ancestor_list = {}
   local node = leaf
@@ -29,11 +37,14 @@ end
 
 local function highlight_node(leaf, root)
   local ancestor_list = get_leaf_ancestor_list(leaf, root)
+  local relative_postion = leaf.data.virt_win_col - 1
   for i, node in ipairs(ancestor_list) do
     if node then
+      local virt_win_col = M.config.label.position(relative_postion, leaf.data.virt_win_col)
+      relative_postion = virt_win_col
       set_extmark({
         line = leaf.data.line,
-        virt_win_col = leaf.data.virt_win_col + i - 1,
+        virt_win_col = virt_win_col,
         ns_id = node.parent.ns_id,
         hl_group = i == 1 and "EyeTrackKey" or "EyeTrackNextKey",
         text = node.key,
@@ -95,12 +106,11 @@ local function compute(label_count, total)
   return compute_run(1)
 end
 
---- @param options EyeTrack.Core.Active.Options
-function M:active(options)
-  table.insert(self.state, options.root)
-  highlight_nodes(options.root)
+function M:active(root)
+  table.insert(self.state, root)
+  highlight_nodes(root)
   vim.cmd.redraw()
-  self:listen(options)
+  self:listen(root)
 end
 
 function M:create_ns_id()
@@ -110,25 +120,12 @@ function M:create_ns_id()
 end
 
 function M:clear_ns_id(opts)
-  opts = opts or {}
-
-  if opts.filter_id == nil then
-    for _, ns_id in ipairs(self.ns_ids) do
-      vim.api.nvim_buf_clear_namespace(0, ns_id, 0, -1)
-    end
-    return
-  end
-
   for _, ns_id in ipairs(self.ns_ids) do
-    if ns_id ~= opts.filter_id then
-      vim.api.nvim_buf_clear_namespace(0, ns_id, 0, -1)
-    end
+    vim.api.nvim_buf_clear_namespace(0, ns_id, 0, -1)
   end
 end
 
---- @param options EyeTrack.Core.Active.Options
-function M:listen(options)
-  local root = options.root
+function M:listen(root)
   local c = vim.fn.getchar()
   local key = vim.fn.keytrans(tostring(c)):lower()
   local char = vim.fn.nr2char(c --[[@as integer]])
@@ -137,30 +134,24 @@ function M:listen(options)
   if key == "<bs>" or char == " " then
     local node = self.state[#self.state - 1]
     if node then
-      self:active({
-        root = node,
-        unmatched = options.unmatched,
-        matched = options.matched,
-      })
+      self:active(node)
       return
     end
   end
 
   if not root or root.children[char] == nil then
-    util.callback_option(options.unmatched)
+    util.callback_option(self.config.unmatched)
+    self:finish()
     return
   end
 
   local node = root.children[char]
 
   if node.level == 0 then
-    util.callback_option(options.matched, node.data)
+    util.callback_option(node.matched and node.matched or self.config.matched, node.data)
+    self:finish()
   else
-    self:active({
-      root = node,
-      matched = options.matched,
-      unmatched = options.unmatched,
-    })
+    self:active(node)
   end
 end
 
@@ -195,8 +186,8 @@ function M:register_node(parent, key)
   return node
 end
 
---- @param options EyeTrack.Core.Register
-function M:_register(node, options)
+--- @param register EyeTrack.Core.Register
+function M:_register(node, register)
   if not node then
     return
   end
@@ -204,7 +195,7 @@ function M:_register(node, options)
   local function transfer()
     if node.parent then
       node.parent.current = nil
-      self:_register(node.parent, options)
+      self:_register(node.parent, register)
     end
   end
 
@@ -214,15 +205,16 @@ function M:_register(node, options)
       return
     end
     local leaf = self:register_leaf(node, get_random_key(node))
+    leaf.matched = register.matched
     leaf.data = {
-      line = options.line,
-      virt_win_col = options.virt_win_col,
+      line = register.line,
+      virt_win_col = register.virt_win_col,
       key = leaf.key,
-      data = options.data,
+      data = register.data,
     }
   else
     if node.current then
-      self:_register(node.current, options)
+      self:_register(node.current, register)
       return
     end
     if node.remain == 0 then
@@ -230,7 +222,7 @@ function M:_register(node, options)
       return
     end
     node.current = self:register_node(node, get_random_key(node))
-    self:_register(node.current, options)
+    self:_register(node.current, register)
   end
 end
 
@@ -239,8 +231,14 @@ function M:register(options)
   self:_register(self.root, options)
 end
 
-function M:init(total)
-  local level, remain1, remain2 = compute(26, total)
+--- @param options EyeTrack.Core.Options
+function M:init(options)
+  local level, remain1, remain2 = compute(26, #options.registers)
+  self.config = {
+    matched = options.matched,
+    unmatched = options.unmatched,
+    label = vim.tbl_deep_extend("force", default_config.label, options.label or {}),
+  }
   self.state = {}
   self.ns_ids = {}
   self.root = {
@@ -252,21 +250,35 @@ function M:init(total)
   self.root.current = self:register_node(self.root, "_")
   self.root.current.key = nil
   self.root.current.remain = remain1
+  self.finish_callbacks = {}
+  self.begin_callbacks = {}
   setmetatable(self.root.children, { __index = self.root.children["_"].children })
+  require("eye-track.core.layer").access(options.layer, function(begin, finish)
+    table.insert(self.begin_callbacks, begin)
+    table.insert(self.finish_callbacks, finish)
+  end)
 end
 
 --- @param options EyeTrack.Core.Options
 function M:main(options)
-  local registers = options.registers
-  self:init(#registers)
-  for _, value in ipairs(registers) do
-    self:register(value)
+  self:init(options)
+  for _, register in ipairs(options.registers) do
+    self:register(register)
   end
-  self:active({
-    root = self.root,
-    unmatched = options.unmatched,
-    matched = options.matched,
-  })
+  self:begin()
+  self:active(self.root)
+end
+
+function M:finish()
+  for _, cb in ipairs(self.finish_callbacks) do
+    cb()
+  end
+end
+
+function M:begin()
+  for _, cb in ipairs(self.begin_callbacks) do
+    cb()
+  end
 end
 
 return M
