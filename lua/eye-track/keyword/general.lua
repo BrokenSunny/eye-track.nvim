@@ -88,30 +88,55 @@ local function main(opts)
   general_iter(matches, topline, botline, function(match)
     local ctx = {
       match = match,
-      hl_groups = {
-        EyeTrackKeyword1 = "EyeTrackKeyword1",
-        EyeTrackKeywordKey1 = "EyeTrackKeywordKey1",
-        EyeTrackKeywordNextKey1 = "EyeTrackKeywordNextKey1",
-        EyeTrackKeyword2 = "EyeTrackKeyword2",
-        EyeTrackKeywordKey2 = "EyeTrackKeywordKey2",
-        EyeTrackKeywordNextKey2 = "EyeTrackKeywordNextKey2",
+      hl_group1 = {
+        "EyeTrackKeyword1",
+        "EyeTrackKeywordKey1",
+        "EyeTrackKeywordNextKey1",
       },
-      create_highlight = function(options)
-        return {
-          hl_group = options.label,
-          append_highlights = {
-            function(ns_id)
-              vim.api.nvim_buf_set_extmark(0, ns_id, match.line, match.start_virt_win_col, {
-                end_col = match.end_virt_win_col + 1,
-                hl_group = options.keyword,
-              })
-            end,
-          },
-        }
-      end,
+      hl_group2 = {
+        "EyeTrackKeyword2",
+        "EyeTrackKeywordKey2",
+        "EyeTrackKeywordNextKey2",
+      },
     }
-    local label = opts.create_label(ctx)
-    label.data = match
+
+    local hl_group
+    if type(opts.hl_group) == "function" then
+      hl_group = opts.hl_group(ctx)
+    end
+    if type(hl_group) ~= "table" then
+      hl_group = nil
+    end
+
+    local label = {
+      data = match,
+      line = match.line,
+      highlight = {
+        hl_group = hl_group and { hl_group[2], hl_group[3] },
+        append_highlights = {
+          function(ns_id)
+            if not hl_group then
+              return
+            end
+            if type(hl_group[1]) ~= "string" then
+              return
+            end
+            vim.api.nvim_buf_set_extmark(0, ns_id, match.line, match.start_virt_win_col, {
+              end_col = match.end_virt_win_col + 1,
+              hl_group = hl_group[1],
+            })
+          end,
+        },
+      },
+    }
+    if opts.label_position == "-1" then
+      label.virt_win_col = match.start_virt_win_col
+    elseif opts.label_position == "0" then
+      label.virt_win_col = math.floor((match.end_virt_win_col - match.start_virt_win_col) / 2)
+        + match.start_virt_win_col
+    elseif opts.label_position == "1" then
+      label.virt_win_col = match.end_virt_win_col
+    end
     table.insert(labels, label)
   end)
   require("eye-track.core").main(labels, {
