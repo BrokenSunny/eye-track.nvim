@@ -2,7 +2,7 @@ local M = {}
 
 function M.callback_option(cb, ...)
   if type(cb) == "function" then
-    cb(...)
+    return cb(...)
   end
 end
 

@@ -38,15 +38,31 @@ end
 local function highlight_node(leaf, root)
   local ancestor_list = get_leaf_ancestor_list(leaf, root)
   local relative_postion = leaf.data.virt_win_col - 1
+
+  local highlight = leaf.highlight
+  if type(highlight.hl_group) == "function" then
+    highlight.hl_group = highlight.hl_group({})
+  end
+  if type(highlight.hl_group) ~= "table" then
+    highlight.hl_group = { "EyeTrackKey", "EyeTrackNextKey" }
+  end
+
   for i, node in ipairs(ancestor_list) do
     if node then
+      if node.level == 0 then
+        if type(highlight.append_highlights) == "table" then
+          for _, cb in ipairs(highlight.append_highlights) do
+            util.callback_option(cb, node.parent.ns_id)
+          end
+        end
+      end
       local virt_win_col = M.config.label.position(relative_postion, leaf.data.virt_win_col)
       relative_postion = virt_win_col
       set_extmark({
         line = leaf.data.line,
         virt_win_col = virt_win_col,
         ns_id = node.parent.ns_id,
-        hl_group = i == 1 and "EyeTrackKey" or "EyeTrackNextKey",
+        hl_group = highlight.hl_group[i] or highlight.hl_group[#highlight.hl_group],
         text = node.key,
       })
     end
@@ -119,7 +135,7 @@ function M:create_ns_id()
   return ns_id
 end
 
-function M:clear_ns_id(opts)
+function M:clear_ns_id()
   for _, ns_id in ipairs(self.ns_ids) do
     vim.api.nvim_buf_clear_namespace(0, ns_id, 0, -1)
   end
@@ -186,8 +202,8 @@ function M:register_node(parent, key)
   return node
 end
 
---- @param register EyeTrack.Core.Register
-function M:_register(node, register)
+--- @param label EyeTrack.Core.LabelSpec
+function M:_register(node, label)
   if not node then
     return
   end
@@ -195,7 +211,7 @@ function M:_register(node, register)
   local function transfer()
     if node.parent then
       node.parent.current = nil
-      self:_register(node.parent, register)
+      self:_register(node.parent, label)
     end
   end
 
@@ -205,16 +221,17 @@ function M:_register(node, register)
       return
     end
     local leaf = self:register_leaf(node, get_random_key(node))
-    leaf.matched = register.matched
+    leaf.matched = label.matched
+    leaf.highlight = label.highlight or {}
     leaf.data = {
-      line = register.line,
-      virt_win_col = register.virt_win_col,
+      line = label.line,
+      virt_win_col = label.virt_win_col,
       key = leaf.key,
-      data = register.data,
+      data = label.data,
     }
   else
     if node.current then
-      self:_register(node.current, register)
+      self:_register(node.current, label)
       return
     end
     if node.remain == 0 then
@@ -222,18 +239,20 @@ function M:_register(node, register)
       return
     end
     node.current = self:register_node(node, get_random_key(node))
-    self:_register(node.current, register)
+    self:_register(node.current, label)
   end
 end
 
---- @param options EyeTrack.Core.Register
+--- @param options EyeTrack.Core.LabelSpec
 function M:register(options)
   self:_register(self.root, options)
 end
 
---- @param options EyeTrack.Core.Options
-function M:init(options)
-  local level, remain1, remain2 = compute(26, #options.registers)
+--- @param total number
+--- @param options? EyeTrack.Core.Options
+function M:init(total, options)
+  options = options or {}
+  local level, remain1, remain2 = compute(26, total)
   self.config = {
     matched = options.matched,
     unmatched = options.unmatched,
@@ -259,11 +278,12 @@ function M:init(options)
   end)
 end
 
---- @param options EyeTrack.Core.Options
-function M:main(options)
-  self:init(options)
-  for _, register in ipairs(options.registers) do
-    self:register(register)
+--- @param labels table<EyeTrack.Core.LabelSpec>
+--- @param options? EyeTrack.Core.Options
+function M:main(labels, options)
+  self:init(#labels, options)
+  for _, label in ipairs(labels) do
+    self:register(label)
   end
   self:begin()
   self:active(self.root)

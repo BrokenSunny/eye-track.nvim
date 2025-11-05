@@ -1,3 +1,32 @@
+local EyeTrackKey = vim.api.nvim_get_hl(0, {
+  name = "EyeTrackKey",
+})
+local EyeTrackNextKey = vim.api.nvim_get_hl(0, {
+  name = "EyeTrackNextKey",
+})
+vim.api.nvim_set_hl(0, "EyeTrackKeyword1", {
+  bg = "#cccccc",
+})
+vim.api.nvim_set_hl(0, "EyeTrackKeywordKey1", {
+  bg = "#cccccc",
+  fg = EyeTrackKey.fg,
+})
+vim.api.nvim_set_hl(0, "EyeTrackKeywordNextKey1", {
+  bg = "#cccccc",
+  fg = EyeTrackNextKey.fg,
+})
+
+vim.api.nvim_set_hl(0, "EyeTrackKeyword2", {
+  bg = "#aaaaaa",
+})
+vim.api.nvim_set_hl(0, "EyeTrackKeywordKey2", {
+  bg = "#aaaaaa",
+  fg = EyeTrackKey.fg,
+})
+vim.api.nvim_set_hl(0, "EyeTrackKeywordNextKey2", {
+  bg = "#aaaaaa",
+  fg = EyeTrackNextKey.fg,
+})
 --- @param matches table<EyeTrack.Keyword.Match>
 local function general_iter(matches, topline, botline, callback)
   local cursor_row = vim.api.nvim_win_get_cursor(0)[1]
@@ -55,15 +84,40 @@ local function main(opts)
     rightcol = rightcol,
     keyword = opts.keyword,
   })
-  local registers = {}
+  local labels = {}
   general_iter(matches, topline, botline, function(match)
-    local register = opts.register(match)
-    register.data = match
-    table.insert(registers, register)
+    local ctx = {
+      match = match,
+      hl_groups = {
+        EyeTrackKeyword1 = "EyeTrackKeyword1",
+        EyeTrackKeywordKey1 = "EyeTrackKeywordKey1",
+        EyeTrackKeywordNextKey1 = "EyeTrackKeywordNextKey1",
+        EyeTrackKeyword2 = "EyeTrackKeyword2",
+        EyeTrackKeywordKey2 = "EyeTrackKeywordKey2",
+        EyeTrackKeywordNextKey2 = "EyeTrackKeywordNextKey2",
+      },
+      create_highlight = function(options)
+        return {
+          hl_group = options.label,
+          append_highlights = {
+            function(ns_id)
+              vim.api.nvim_buf_set_extmark(0, ns_id, match.line, match.start_virt_win_col, {
+                end_col = match.end_virt_win_col + 1,
+                hl_group = options.keyword,
+              })
+            end,
+          },
+        }
+      end,
+    }
+    local label = opts.create_label(ctx)
+    label.data = match
+    table.insert(labels, label)
   end)
-  require("eye-track.core").main({
-    registers = registers,
-    matched = opts.matched,
+  require("eye-track.core").main(labels, {
+    matched = function(ctx)
+      opts.matched(ctx)
+    end,
   })
 end
 

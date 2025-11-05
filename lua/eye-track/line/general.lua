@@ -7,11 +7,11 @@ local function main(options)
   local virt_win_col = vim.fn.virtcol(".") - leftcol - 1
   local cursor = vim.api.nvim_win_get_cursor(0)
 
-  --- @type table<EyeTrack.Core.Register>
-  local registers = {}
+  --- @type EyeTrack.Core.LabelSpec[]
+  local labels = {}
   for i = topline, botline do
     if i ~= cursor[1] then
-      table.insert(registers, {
+      table.insert(labels, {
         line = i - 1,
         virt_win_col = virt_win_col,
         data = {
@@ -22,12 +22,7 @@ local function main(options)
       })
     end
   end
-  require("eye-track.core").main({
-    registers = registers,
-    matched = function(ctx)
-      options.matched(ctx)
-    end,
-  })
+  require("eye-track.core").main(labels, { matched = options.matched })
 end
 
 return main
