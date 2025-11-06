@@ -18,7 +18,7 @@ local function get_leaf_ancestor_list(leaf, root)
       table.insert(ancestor_list, 1, node)
     end
     node = node.parent
-    if node.ns_id == root.ns_id and node.key == root.key then
+    if node.id == root.id then
       node = nil
     end
   end
@@ -29,7 +29,7 @@ local function set_extmark(options)
   local line = options.line
   local virt_win_col = options.virt_win_col
   local ns_id = options.ns_id
-  vim.api.nvim_buf_set_extmark(0, ns_id, line, 0, {
+  vim.api.nvim_buf_set_extmark(options.buf, ns_id, line, 0, {
     virt_text_win_col = virt_win_col,
     virt_text = { { options.text, options.hl_group } },
   })
@@ -52,16 +52,17 @@ local function highlight_node(leaf, root)
       if node.level == 0 then
         if type(highlight.append_highlights) == "table" then
           for _, cb in ipairs(highlight.append_highlights) do
-            util.callback_option(cb, node.parent.ns_id)
+            util.callback_option(cb, M.ns_id)
           end
         end
       end
       local virt_win_col = M.config.label.position(relative_postion, leaf.data.virt_win_col)
       relative_postion = virt_win_col
       set_extmark({
+        buf = leaf.data.buf,
         line = leaf.data.line,
         virt_win_col = virt_win_col,
-        ns_id = node.parent.ns_id,
+        ns_id = M.ns_id,
         hl_group = highlight.hl_group[i] or highlight.hl_group[#highlight.hl_group],
         text = node.key,
       })
@@ -129,15 +130,10 @@ function M:active(root)
   self:listen(root)
 end
 
-function M:create_ns_id()
-  local ns_id = vim.api.nvim_create_namespace("eye-track-namespace" .. #self.ns_ids)
-  table.insert(self.ns_ids, ns_id)
-  return ns_id
-end
-
 function M:clear_ns_id()
-  for _, ns_id in ipairs(self.ns_ids) do
-    vim.api.nvim_buf_clear_namespace(0, ns_id, 0, -1)
+  for _, buf in ipairs(vim.tbl_keys(self.bufs)) do
+    buf = tonumber(buf)
+    vim.api.nvim_buf_clear_namespace(buf--[[@as integer]], self.ns_id, 0, -1)
   end
 end
 
@@ -179,6 +175,7 @@ function M:register_leaf(parent, key)
     level = 0,
     key = key,
     parent = parent,
+    id = parent.id .. (#vim.tbl_keys(parent.children) + 1),
   }
   parent.children[key] = node
   parent.remain = parent.remain - 1
@@ -195,7 +192,7 @@ function M:register_node(parent, key)
     parent = parent,
     remain = 26,
     children = {},
-    ns_id = self:create_ns_id(),
+    id = parent.id .. (#vim.tbl_keys(parent.children) + 1),
   }
   parent.children[key] = node
   parent.remain = parent.remain - 1
@@ -221,6 +218,8 @@ function M:_register(node, label)
       return
     end
     local leaf = self:register_leaf(node, get_random_key(node))
+    label.buf = label.buf or vim.api.nvim_get_current_buf()
+    self.bufs[tostring(label.buf)] = true
     leaf.matched = label.matched
     leaf.highlight = label.highlight or {}
     leaf.data = {
@@ -228,6 +227,7 @@ function M:_register(node, label)
       virt_win_col = label.virt_win_col,
       key = leaf.key,
       data = label.data,
+      buf = label.buf,
     }
   else
     if node.current then
@@ -243,9 +243,9 @@ function M:_register(node, label)
   end
 end
 
---- @param options EyeTrack.Core.LabelSpec
-function M:register(options)
-  self:_register(self.root, options)
+--- @param label EyeTrack.Core.LabelSpec
+function M:register(label)
+  self:_register(self.root, label)
 end
 
 --- @param total number
@@ -259,23 +259,24 @@ function M:init(total, options)
     label = vim.tbl_deep_extend("force", default_config.label, options.label or {}),
   }
   self.state = {}
-  self.ns_ids = {}
   self.root = {
+    id = "0",
     level = level + 1,
     remain = remain2 + 1,
     children = {},
-    ns_id = self:create_ns_id(),
   }
+  self.bufs = {}
+  self.ns_id = vim.api.nvim_create_namespace("eye-track-namespace")
   self.root.current = self:register_node(self.root, "_")
   self.root.current.key = nil
   self.root.current.remain = remain1
   self.finish_callbacks = {}
   self.begin_callbacks = {}
   setmetatable(self.root.children, { __index = self.root.children["_"].children })
-  require("eye-track.core.layer").access(options.layer, function(begin, finish)
-    table.insert(self.begin_callbacks, begin)
-    table.insert(self.finish_callbacks, finish)
-  end)
+  -- require("eye-track.core.layer").access(options.layer, function(begin, finish)
+  --   table.insert(self.begin_callbacks, begin)
+  --   table.insert(self.finish_callbacks, finish)
+  -- end)
 end
 
 --- @param labels table<EyeTrack.Core.LabelSpec>

@@ -8,8 +8,9 @@ local M = {}
 --- @field line number
 --- @field virt_win_col number
 --- @field matched? fun(ctx: any)
---- @field data? any
 --- @field highlight? EyeTrack.Core.LabelSpec.Highlight
+--- @field buf? integer
+--- @field data? any
 
 --- @class EyeTrack.Core.Label
 --- @field position fun(relative: number, absolute: number): number

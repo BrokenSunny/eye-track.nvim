@@ -7,6 +7,7 @@ local M = {}
 --- @field leftcol number
 --- @field rightcol number
 --- @field should_capture? boolean
+--- @field buf? integer
 
 --- @class EyeTrack.Keyword.Match
 --- @field start_col number
@@ -38,8 +39,8 @@ local function get_pattern(pattern)
   return pattern or ""
 end
 
-local function get_display_width(start_row, start_col, end_row, end_col)
-  local text = vim.api.nvim_buf_get_text(0, start_row, start_col, end_row, end_col, {})[1]
+local function get_display_width(buf, start_row, start_col, end_row, end_col)
+  local text = vim.api.nvim_buf_get_text(buf, start_row, start_col, end_row, end_col, {})[1]
   local display_width = vim.fn.strdisplaywidth(text)
   return display_width
 end
@@ -51,8 +52,8 @@ function M:match()
 end
 
 function M:collect_keyword(i, start_col, end_col, current_line)
-  local start_virt_col = get_display_width(i - 1, 0, i - 1, start_col)
-  local end_virt_col = get_display_width(i - 1, 0, i - 1, end_col) - 1
+  local start_virt_col = get_display_width(self.buf, i - 1, 0, i - 1, start_col)
+  local end_virt_col = get_display_width(self.buf, i - 1, 0, i - 1, end_col) - 1
 
   --- @type EyeTrack.Keyword.Match
   local match = {
@@ -74,8 +75,8 @@ function M:get_keyword(i, leftcol, rightcol)
   local start_pos = 0
 
   while true do
-    local start, end_ = self.regex:match_line(0, i - 1, start_pos)
-    local current_line = self.should_capture and vim.api.nvim_buf_get_lines(0, i - 1, i, false)[1]
+    local start, end_ = self.regex:match_line(self.buf, i - 1, start_pos)
+    local current_line = self.should_capture and vim.api.nvim_buf_get_lines(self.buf, i - 1, i, false)[1]
 
     if not start or not end_ or (start == 0 and end_ == 0) then
       break
@@ -101,6 +102,7 @@ function M:init(opts)
 
   --- @type table<EyeTrack.Keyword.Match>
   self.matches = {}
+  self.buf = opts.buf or vim.api.nvim_get_current_buf()
   self.regex = vim.regex(get_pattern(opts.keyword))
 end
 
