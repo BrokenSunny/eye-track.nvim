@@ -56,11 +56,11 @@ function M.access(config, callback)
     return
   end
   callback(function()
+    M.ns_id = vim.api.nvim_create_namespace("eye-track-layer")
     M:draw()
   end, function()
     M:clear()
   end)
-  M.ns_id = vim.api.nvim_create_namespace("eye-track-layer")
 end
 
 return M

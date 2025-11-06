@@ -70,14 +70,10 @@ local function set_extmark(options)
   local line = options.line
   local col = options.col
   local ns_id = options.ns_id
-  local l = vim.api.nvim_buf_get_lines(options.buf, options.line, options.line + 1, false)[1]
-  if col > #l - 1 then
-    return
-  end
-  vim.api.nvim_buf_set_extmark(options.buf, ns_id, line, col, {
+  pcall(vim.api.nvim_buf_set_extmark, options.buf, ns_id, line, col, {
     virt_text_pos = "overlay",
     virt_text = { { options.text, options.hl_group } },
-    end_col = col + 1,
+    end_col = col,
     hl_mode = "combine",
   })
 end
@@ -186,7 +182,7 @@ end
 
 function M:listen(root)
   local char = vim.fn.getcharstr()
-  local key = vim.fn.keytrans(char):lower()
+  local key = vim.fn.keytrans(char)
   self:clear_ns_id()
 
   if not root or root.children[char] == nil then
@@ -326,10 +322,10 @@ function M:init(labels, config)
   self.state = {}
   self.finish_callbacks = {}
   self.begin_callbacks = {}
-  self.root.current = register_node(self, self.root, "_")
+  self.root.current = register_node(self, self.root, "[[root]]")
   self.root.current.label = nil
   self.root.current.remain = remain1
-  setmetatable(self.root.children, { __index = self.root.children["_"].children })
+  setmetatable(self.root.children, { __index = self.root.children["[[root]]"].children })
   require("eye-track.core.layer").access(config.layer, function(b, f)
     table.insert(self.begin_callbacks, b)
     table.insert(self.finish_callbacks, f)
@@ -340,8 +336,12 @@ function M:main()
   for _, label in ipairs(self.labels) do
     self:register(label)
   end
+  self:active(self.root)
+end
+
+function M:active(root)
   begin(self)
-  active(self, self.root)
+  active(self, root)
 end
 
 --- @param labels table<EyeTrack.LabelSpec>
