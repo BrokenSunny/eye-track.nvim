@@ -5,7 +5,7 @@ vim.api.nvim_set_hl(0, "EyeTrackLayer", {
   fg = Comment.fg,
 })
 
---- @type EyeTrack.Core.Layer
+--- @type EyeTrack.Layer
 local default = {
   enable = true,
   highlight = function()
@@ -13,16 +13,16 @@ local default = {
     return {
       {
         hl_group = "EyeTrackLayer",
-        start = { wininfo.topline - 1, 0 },
-        _end = { wininfo.botline, 0 },
+        start_pos = { wininfo.topline - 1, 0 },
+        end_pos = { wininfo.botline, 0 },
       },
     }
   end,
 }
 
 local function hl(data)
-  vim.api.nvim_buf_set_extmark(0, data.ns_id, data.start[1], 0, {
-    end_row = data._end[1],
+  vim.api.nvim_buf_set_extmark(0, data.ns_id, data.start_pos[1], 0, {
+    end_row = data.end_pos[1],
     hl_group = data.hl_group,
     hl_eol = true,
   })
@@ -49,7 +49,7 @@ function M:clear()
   end
 end
 
---- @type fun(config?: EyeTrack.Core.Layer, callback: any)
+--- @type fun(config?: EyeTrack.Layer, callback: any)
 function M.access(config, callback)
   M.config = vim.tbl_deep_extend("force", default, config or {})
   if not M.config.enable then

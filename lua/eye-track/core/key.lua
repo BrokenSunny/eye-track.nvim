@@ -4,7 +4,7 @@ local util = require("eye-track.core.util")
 
 local default_config = {
   label = {
-    position = function(relative)
+    position = function(relative, absolute)
       return relative + 1
     end,
   },
@@ -41,7 +41,7 @@ local function set_extmark(options)
   })
 end
 
-local function highlight_node(leaf, root)
+local function highlight_node(self, leaf, root)
   local ancestor_list = get_leaf_ancestor_list(leaf, root)
   local relative_postion = leaf.data.col - 1
 
@@ -58,17 +58,17 @@ local function highlight_node(leaf, root)
       if node.level == 0 then
         if type(highlight.append_highlights) == "table" then
           for _, cb in ipairs(highlight.append_highlights) do
-            util.callback_option(cb, M.ns_id)
+            util.callback_option(cb, self.ns_id)
           end
         end
       end
-      local col = M.config.label.position(relative_postion, leaf.data.col)
+      local col = self.config.label.position(relative_postion, leaf.data.col)
       relative_postion = col
       set_extmark({
         buf = leaf.data.buf,
         line = leaf.data.line,
         col = col,
-        ns_id = M.ns_id,
+        ns_id = self.ns_id,
         hl_group = highlight.hl_group[i] or highlight.hl_group[#highlight.hl_group],
         text = node.key,
       })
@@ -76,10 +76,10 @@ local function highlight_node(leaf, root)
   end
 end
 
-local function highlight_nodes(root)
+local function highlight_nodes(self, root)
   local function run(node)
     if node.level == 0 then
-      highlight_node(node, root)
+      highlight_node(self, node, root)
       return
     end
     for _, child in pairs(node.children or {}) do
@@ -103,13 +103,7 @@ local function get_random_key(node)
   return get_random_key(node)
 end
 
---- @return number
---- @return number
---- @return number
 local function compute(label_count, total)
-  --- @return number
-  --- @return number
-  --- @return number
   local function compute_run(i)
     local min = label_count * math.pow(26, i - 1)
     local max = label_count * math.pow(26, i)
@@ -131,7 +125,7 @@ end
 
 function M:active(root)
   table.insert(self.state, root)
-  highlight_nodes(root)
+  highlight_nodes(self, root)
   vim.cmd.redraw()
   self:listen(root)
 end
@@ -205,7 +199,7 @@ function M:register_node(parent, key)
   return node
 end
 
---- @param label EyeTrack.Core.LabelSpec
+--- @param label EyeTrack.LabelSpec
 function M:_register(node, label)
   if not node then
     return
@@ -249,13 +243,13 @@ function M:_register(node, label)
   end
 end
 
---- @param label EyeTrack.Core.LabelSpec
+--- @param label EyeTrack.LabelSpec
 function M:register(label)
   self:_register(self.root, label)
 end
 
 --- @param total number
---- @param options? EyeTrack.Core.Options
+--- @param options? EyeTrack.Config
 function M:init(total, options)
   options = options or {}
   local level, remain1, remain2 = compute(26, total)
@@ -285,10 +279,10 @@ function M:init(total, options)
   end)
 end
 
---- @param labels table<EyeTrack.Core.LabelSpec>
---- @param options? EyeTrack.Core.Options
-function M:main(labels, options)
-  self:init(#labels, options)
+--- @param labels table<EyeTrack.LabelSpec>
+--- @param config? EyeTrack.Config
+function M:main(labels, config)
+  self:init(#labels, config)
   for _, label in ipairs(labels) do
     self:register(label)
   end

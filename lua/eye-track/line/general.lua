@@ -30,7 +30,7 @@ local function main(options)
   local virt_col = vim.fn.virtcol(".")
   local cursor = vim.api.nvim_win_get_cursor(0)
 
-  --- @type EyeTrack.Core.LabelSpec[]
+  --- @type EyeTrack.LabelSpec[]
   local labels = {}
   ---@diagnostic disable-next-line: undefined-field
   local virtualedit = vim.opt_local.virtualedit:get()[1]
