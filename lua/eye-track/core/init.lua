@@ -6,7 +6,7 @@ local M = {}
 
 --- @class EyeTrack.Core.LabelSpec
 --- @field line number
---- @field virt_win_col number
+--- @field col number
 --- @field matched? fun(ctx: any)
 --- @field highlight? EyeTrack.Core.LabelSpec.Highlight
 --- @field buf? integer

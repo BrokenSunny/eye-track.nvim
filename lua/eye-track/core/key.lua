@@ -4,7 +4,7 @@ local util = require("eye-track.core.util")
 
 local default_config = {
   label = {
-    position = function(relative, absolute)
+    position = function(relative)
       return relative + 1
     end,
   },
@@ -27,17 +27,23 @@ end
 
 local function set_extmark(options)
   local line = options.line
-  local virt_win_col = options.virt_win_col
+  local col = options.col
   local ns_id = options.ns_id
-  vim.api.nvim_buf_set_extmark(options.buf, ns_id, line, 0, {
-    virt_text_win_col = virt_win_col,
+  local l = vim.api.nvim_buf_get_lines(options.buf, options.line, options.line + 1, false)[1]
+  if col > #l - 1 then
+    return
+  end
+  vim.api.nvim_buf_set_extmark(options.buf, ns_id, line, col, {
+    virt_text_pos = "overlay",
     virt_text = { { options.text, options.hl_group } },
+    end_col = col + 1,
+    hl_mode = "combine",
   })
 end
 
 local function highlight_node(leaf, root)
   local ancestor_list = get_leaf_ancestor_list(leaf, root)
-  local relative_postion = leaf.data.virt_win_col - 1
+  local relative_postion = leaf.data.col - 1
 
   local highlight = leaf.highlight
   if type(highlight.hl_group) == "function" then
@@ -56,12 +62,12 @@ local function highlight_node(leaf, root)
           end
         end
       end
-      local virt_win_col = M.config.label.position(relative_postion, leaf.data.virt_win_col)
-      relative_postion = virt_win_col
+      local col = M.config.label.position(relative_postion, leaf.data.col)
+      relative_postion = col
       set_extmark({
         buf = leaf.data.buf,
         line = leaf.data.line,
-        virt_win_col = virt_win_col,
+        col = col,
         ns_id = M.ns_id,
         hl_group = highlight.hl_group[i] or highlight.hl_group[#highlight.hl_group],
         text = node.key,
@@ -224,7 +230,7 @@ function M:_register(node, label)
     leaf.highlight = label.highlight or {}
     leaf.data = {
       line = label.line,
-      virt_win_col = label.virt_win_col,
+      col = label.col,
       key = leaf.key,
       data = label.data,
       buf = label.buf,
@@ -273,10 +279,10 @@ function M:init(total, options)
   self.finish_callbacks = {}
   self.begin_callbacks = {}
   setmetatable(self.root.children, { __index = self.root.children["_"].children })
-  -- require("eye-track.core.layer").access(options.layer, function(begin, finish)
-  --   table.insert(self.begin_callbacks, begin)
-  --   table.insert(self.finish_callbacks, finish)
-  -- end)
+  require("eye-track.core.layer").access(options.layer, function(begin, finish)
+    table.insert(self.begin_callbacks, begin)
+    table.insert(self.finish_callbacks, finish)
+  end)
 end
 
 --- @param labels table<EyeTrack.Core.LabelSpec>

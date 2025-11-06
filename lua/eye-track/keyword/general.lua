@@ -73,12 +73,15 @@ end
 local function main(opts)
   local wins = vim.api.nvim_tabpage_list_wins(vim.api.nvim_get_current_tabpage())
   local labels = {}
+  local bufs = {}
+
   for _, win in ipairs(wins) do
     local wininfo = vim.fn.getwininfo(win)[1]
     local buf = vim.api.nvim_win_get_buf(win)
     if vim.api.nvim_get_option_value("buflisted", {
       buf = buf,
-    }) then
+    }) and not bufs[tostring(buf)] then
+      bufs[tostring(buf)] = true
       local topline = wininfo.topline
       local botline = wininfo.botline
       ---@diagnostic disable-next-line: undefined-field
@@ -142,12 +145,11 @@ local function main(opts)
           },
         }
         if opts.label_position == "-1" then
-          label.virt_win_col = match.start_virt_win_col
+          label.col = match.start_col
         elseif opts.label_position == "0" then
-          label.virt_win_col = math.floor((match.end_virt_win_col - match.start_virt_win_col) / 2)
-            + match.start_virt_win_col
+          label.col = math.floor((match.end_col - match.start_col) / 2) + match.start_col - 1
         elseif opts.label_position == "1" then
-          label.virt_win_col = match.end_virt_win_col
+          label.col = match.end_col - 1
         end
         table.insert(labels, label)
       end)

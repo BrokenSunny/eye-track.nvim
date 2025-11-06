@@ -43,21 +43,17 @@ local function main(options)
     table.insert(labels, label)
     if options.position == -1 then
       local f = line:find("%S") or 1
-      label.virt_win_col = f - leftcol - 1
-      label.data.col = math.max(label.virt_win_col, 0)
+      label.col = math.max(f - 1, 0)
     elseif options.position == -2 then
-      label.virt_win_col = 0 - leftcol
-      label.data.col = 0
+      label.col = 0
     elseif options.position == 0 then
     elseif options.position == 1 then
       local width = wininfo.width - wininfo.textoff
       local l = line:gsub("%s*$", "")
-      label.virt_win_col = math.min(#l - leftcol - 1, width - 1)
-      label.data.col = #l
+      label.col = math.min(#l - 1, leftcol + width - 1)
     elseif options.position == 2 then
       local width = wininfo.width - wininfo.textoff
-      label.virt_win_col = math.min(vim.fn.strdisplaywidth(line) - leftcol - 1, width - 1)
-      label.data.col = #line
+      label.col = math.min(#line - 1, leftcol + width - 1)
     end
   end)
   require("eye-track.core").main(labels, {
