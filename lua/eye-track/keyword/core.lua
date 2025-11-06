@@ -63,6 +63,7 @@ function M:collect_keyword(i, start_col, end_col, current_line)
     end_virt_col = end_virt_col,
     start_virt_win_col = start_virt_col - self.leftcol,
     end_virt_win_col = end_virt_col - self.leftcol,
+    row = i,
   }
   if self.should_capture then
     match.capture = current_line:sub(start_col + 1, end_col)

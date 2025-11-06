@@ -1,10 +1,3 @@
-vim.api.nvim_set_hl(0, "EyeTrackKeyword1", {
-  bg = "#cccccc",
-})
-
-vim.api.nvim_set_hl(0, "EyeTrackKeyword2", {
-  bg = "#aaaaaa",
-})
 --- @param matches table<EyeTrack.Keyword.Match>
 local function general_iter(win, matches, topline, botline, callback)
   local cursor_row = vim.api.nvim_win_get_cursor(win)[1]
@@ -23,10 +16,7 @@ local function general_iter(win, matches, topline, botline, callback)
     if cursor_row - count >= topline then
       local match = matches[cursor_row - count - topline + 1]
       for _, value in ipairs(match) do
-        local param = vim.tbl_extend("force", {
-          line = cursor_row - count - 1,
-        }, value)
-        callback(param)
+        callback(value)
       end
     else
       up_break = true
@@ -35,10 +25,7 @@ local function general_iter(win, matches, topline, botline, callback)
     if cursor_row + count < botline then
       local match = matches[cursor_row + count - topline + 2]
       for _, value in ipairs(match) do
-        local param = vim.tbl_extend("force", {
-          line = cursor_row + count,
-        }, value)
-        callback(param)
+        callback(value)
       end
     else
       down_break = true
@@ -77,12 +64,10 @@ local function main(opts)
       general_iter(win, matches, topline, botline, function(match)
         local ctx = {
           match = match,
-          hl_group1 = "EyeTrackKeyword1",
-          hl_group2 = "EyeTrackKeyword2",
         }
-        local hl_group
-        if type(opts.hl_group) == "function" then
-          hl_group = opts.hl_group(ctx)
+        local hl_group = opts.hl_group
+        if type(hl_group) == "function" then
+          hl_group = hl_group(ctx)
         end
         if type(hl_group) ~= "string" then
           hl_group = ""
@@ -95,20 +80,23 @@ local function main(opts)
         elseif opts.label_position == "1" then
           col = match.end_col - 1
         end
-
         local label = {
           buf = buf,
-          line = match.line,
+          line = match.row - 1,
           col = col,
           data = vim.tbl_deep_extend("force", {
             win = win,
             buf = buf,
           }, match),
+          hidden_next_key = (match.end_col - match.start_col) == 1,
           highlight = {
             append_highlights = {
               function(ns_id)
-                vim.api.nvim_buf_set_extmark(buf, ns_id, match.line, match.start_virt_win_col, {
-                  end_col = match.end_virt_win_col + 1,
+                if hl_group == "" then
+                  return
+                end
+                vim.api.nvim_buf_set_extmark(buf, ns_id, match.row - 1, match.start_col, {
+                  end_col = match.end_col,
                   hl_group = hl_group,
                 })
               end,

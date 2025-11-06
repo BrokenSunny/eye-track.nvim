@@ -1,4 +1,5 @@
 local M = {}
+local Key = require("eye-track.core.key")
 
 --- @class EyeTrack.LabelSpec.Highlight
 --- @field hl_group? string[] | fun(ctx: any): string[]
@@ -10,10 +11,13 @@ local M = {}
 --- @field matched? fun(ctx: any)
 --- @field highlight? EyeTrack.LabelSpec.Highlight
 --- @field buf? integer
+--- @field hidden_next_key? boolean
 --- @field data? any
 
 --- @class EyeTrack.Label
---- @field position fun(relative: number, absolute: number): number
+--- @field position? fun(relative: number, absolute: number): number
+--- @field exclude? string[]
+--- @field include? string[]
 
 --- @class EyeTrack.Layer.Highlight
 --- @field start_pos [integer, integer]
@@ -27,13 +31,14 @@ local M = {}
 --- @class EyeTrack.Config
 --- @field unmatched?fun(ctx: any)
 --- @field matched? fun(ctx: any)
+--- @field on_key? fun(ctx: any)
 --- @field label? EyeTrack.Label
 --- @field layer? EyeTrack.Layer
 
---- @param labels EyeTrack.LabelSpec[]
+--- @param labels table<EyeTrack.LabelSpec>
 --- @param config? EyeTrack.Config
-M.main = function(labels, config)
-  require("eye-track.core.key"):main(labels, config)
+function M.main(labels, config)
+  Key:new(labels, config):main()
 end
 
 return M

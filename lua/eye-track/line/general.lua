@@ -51,17 +51,20 @@ local function main(options)
     callback = function(row)
       local line = vim.api.nvim_buf_get_lines(0, row - 1, row, false)[1]
       local col
+      local c
       if vim.fn.strdisplaywidth(line) < virt_col then
         col = #line - 1
+        c = col + 1
       else
         col = virt_col - 1
+        c = col
       end
       local label = {
         line = row - 1,
         col = col,
         data = {
           row = row,
-          col = col,
+          col = c,
         },
       }
       table.insert(labels, label)
