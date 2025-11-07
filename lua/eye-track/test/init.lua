@@ -1,11 +1,48 @@
 local M = {}
 local State = require("eye-track.test.state")
 
+--- @param matches table<EyeTrack.Keyword.Match>
+local function general_iter(win, matches, topline, botline, callback)
+  local cursor_row = vim.api.nvim_win_get_cursor(win)[1]
+  local count = 0
+  local up_break = nil
+  local down_break = nil
+  while true do
+    if count > 1000 then
+      break
+    end
+
+    if up_break and down_break then
+      break
+    end
+
+    if cursor_row - count >= topline then
+      local match = matches[cursor_row - count - topline + 1]
+      for _, value in ipairs(match) do
+        callback(value)
+      end
+    else
+      up_break = true
+    end
+
+    if cursor_row + count < botline then
+      local match = matches[cursor_row + count - topline + 2]
+      for _, value in ipairs(match) do
+        callback(value)
+      end
+    else
+      down_break = true
+    end
+
+    count = count + 1
+  end
+end
+
 local function rollback_state(pattern)
   local state = State:query(pattern)
   if state and state.Key then
     vim.notify(pattern)
-    state.Key:active(state.Key.root)
+    state.Key:active()
     return true
   end
 end
@@ -19,11 +56,7 @@ local function match_text(buf, topline, botline, leftcol, rightcol, pattern, cal
     rightcol = rightcol,
     keyword = pattern:gsub("([\\^$.~[*?+])", "\\%1") .. ".\\?",
   })
-  for _, value in ipairs(matches) do
-    for _, match in ipairs(value) do
-      callback(match)
-    end
-  end
+  general_iter(0, matches, topline, botline, callback)
 end
 
 function M.main()

@@ -132,10 +132,37 @@ local function highlight_nodes(self, root)
 end
 
 local function active(self, root)
-  table.insert(self.state, root)
+  local function listen()
+    local char = vim.fn.getcharstr()
+    local key = vim.fn.keytrans(char)
+    self:clear_ns_id()
+
+    if not root or root.children[char] == nil then
+      finish(self)
+      util.callback_option(self.config.unmatched, key)
+      util.callback_option(self.config.on_key, {
+        matched = nil,
+        label = key,
+      })
+    else
+      local node = root.children[char]
+      if node.level == 0 then
+        util.callback_option(node.matched and node.matched or self.config.matched, node.data)
+        finish(self)
+        util.callback_option(
+          self.config.on_key,
+          vim.tbl_deep_extend("force", {
+            matched = true,
+          }, node.data)
+        )
+      else
+        active(self, node)
+      end
+    end
+  end
   highlight_nodes(self, root)
   vim.cmd.redraw()
-  self:listen(root)
+  listen()
 end
 
 local function get_random_label(include, node)
@@ -173,42 +200,6 @@ local function compute(include, total)
   return compute_run(1)
 end
 
-function M:clear_ns_id()
-  for _, buf in ipairs(vim.tbl_keys(self.bufs)) do
-    buf = tonumber(buf)
-    vim.api.nvim_buf_clear_namespace(buf--[[@as integer]], self.ns_id, 0, -1)
-  end
-end
-
-function M:listen(root)
-  local char = vim.fn.getcharstr()
-  local key = vim.fn.keytrans(char)
-  self:clear_ns_id()
-
-  if not root or root.children[char] == nil then
-    finish(self)
-    util.callback_option(self.config.unmatched, key)
-    util.callback_option(self.config.on_key, {
-      matched = nil,
-      label = key,
-    })
-  else
-    local node = root.children[char]
-    if node.level == 0 then
-      util.callback_option(node.matched and node.matched or self.config.matched, node.data)
-      finish(self)
-      util.callback_option(
-        self.config.on_key,
-        vim.tbl_deep_extend("force", {
-          matched = true,
-        }, node.data)
-      )
-    else
-      active(self, node)
-    end
-  end
-end
-
 local function register_leaf(parent, label)
   if not label then
     return
@@ -239,6 +230,13 @@ local function register_node(self, parent, label)
   parent.children[label] = node
   parent.remain = parent.remain - 1
   return node
+end
+
+function M:clear_ns_id()
+  for _, buf in ipairs(vim.tbl_keys(self.bufs)) do
+    buf = tonumber(buf)
+    vim.api.nvim_buf_clear_namespace(buf--[[@as integer]], self.ns_id, 0, -1)
+  end
 end
 
 --- @param label EyeTrack.LabelSpec
@@ -319,7 +317,6 @@ function M:init(labels, config)
   }
   self.bufs = {}
   self.ns_id = vim.api.nvim_create_namespace("eye-track-namespace")
-  self.state = {}
   self.finish_callbacks = {}
   self.begin_callbacks = {}
   self.root.current = register_node(self, self.root, "[[root]]")
@@ -332,16 +329,16 @@ function M:init(labels, config)
   end)
 end
 
+function M:active()
+  begin(self)
+  active(self, self.root)
+end
+
 function M:main()
   for _, label in ipairs(self.labels) do
     self:register(label)
   end
-  self:active(self.root)
-end
-
-function M:active(root)
-  begin(self)
-  active(self, root)
+  self:active()
 end
 
 --- @param labels table<EyeTrack.LabelSpec>
