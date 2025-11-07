@@ -137,6 +137,15 @@ local function highlight_nodes(self, root)
   run(root)
 end
 
+local function finish(self, ctx)
+  if ctx.matched then
+    util.callback_option(self.config.matched, ctx)
+  else
+    util.callback_option(self.config.unmatched, ctx)
+  end
+  util.callback_option(self.config.finish, ctx)
+end
+
 --- @param self EyeTrack.Label
 --- @param root EyeTrack.Label.Node
 local function active(self, root)
@@ -146,17 +155,15 @@ local function active(self, root)
     self:clear_ns_id()
 
     if not root or root.children[char] == nil then
-      util.callback_option(self.config.unmatched, key)
-      util.callback_option(self.config.finish, {
-        matched = nil,
+      finish(self, {
         label = key,
+        matched = nil,
       })
     else
       local node = root.children[char]
       if node.level == 0 then
-        util.callback_option(node.matched and node.matched or self.config.matched, node.data)
-        util.callback_option(
-          self.config.finish,
+        finish(
+          self,
           vim.tbl_deep_extend("force", {
             matched = true,
           }, node.data)

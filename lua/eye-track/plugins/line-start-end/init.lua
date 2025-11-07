@@ -56,7 +56,14 @@ local function main(options)
       label.col = math.min(#line - 1, leftcol + width - 1)
     end
   end)
+  local Layer = require("eye-track.core.layer")
   require("eye-track.core").main(labels, {
+    start = function()
+      Layer.draw()
+    end,
+    finish = function()
+      Layer.clear()
+    end,
     matched = options.matched,
   })
 end

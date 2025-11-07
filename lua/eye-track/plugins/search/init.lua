@@ -58,7 +58,7 @@ local function match_text(buf, topline, botline, leftcol, rightcol, pattern, cal
   general_iter(0, matches, topline, botline, callback)
 end
 
-local function main()
+local function main(options)
   local win = vim.api.nvim_get_current_win()
   local buf = vim.api.nvim_get_current_buf()
   local wininfo = vim.fn.getwininfo(win)[1]
@@ -81,7 +81,9 @@ local function main()
       buf = buf,
       line = match.row - 1,
       col = match.end_col - offset,
-      data = match,
+      data = vim.tbl_deep_extend("force", match, {
+        end_col = match.end_col - offset - 1,
+      }),
       highlight = {
         append_highlights = {
           function(ns_id)
@@ -118,7 +120,7 @@ local function main()
       end,
       finish = function(ctx)
         if ctx.matched then
-          vim.api.nvim_win_set_cursor(0, { ctx.line + 1, ctx.data.start_col })
+          options.matched(ctx)
           Layer.clear()
           return
         end

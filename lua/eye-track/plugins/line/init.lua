@@ -71,7 +71,16 @@ local function main(options)
     end
   end
   iter_line(cursor[1], topline, botline, callback)
-  require("eye-track.core").main(labels, { matched = options.matched })
+  local Layer = require("eye-track.core.layer")
+  require("eye-track.core").main(labels, {
+    start = function()
+      Layer.draw()
+    end,
+    finish = function()
+      Layer.clear()
+    end,
+    matched = options.matched,
+  })
 end
 
 return main
