@@ -1,55 +1,61 @@
---- @class EyeTrack.Key
+--- @class EyeTrack.Label.Node
+--- @field id string
+--- @field level integer
+--- @field remain integer
+--- @field parent? EyeTrack.Label.Node
+--- @field children table<string, EyeTrack.Label.Node|EyeTrack.Label.Leaf>
+--- @field label? string
+
+--- @class EyeTrack.Label.Leaf: EyeTrack.Label.Node
+--- @field matched? fun(ctx: any)
+--- @field highlight? EyeTrack.LabelSpec.Highlight
+--- @field hidden_next_key? boolean
+--- @field data? any
+
+--- @class EyeTrack.Label
+--- @field config EyeTrack.Label.Config
+--- @field labels EyeTrack.LabelSpec[]
+--- @field root EyeTrack.Label.Node
+--- @field bufs table<string, boolean>
+--- @field ns_id integer
 local M = {}
 local util = require("eye-track.core.util")
 
+--- @type EyeTrack.Label.Config
 local default_config = {
-  label = {
-    position = function(relative, absolute)
-      return relative + 1
-    end,
-    exclude = {},
-    include = {
-      "a",
-      "b",
-      "c",
-      "d",
-      "e",
-      "f",
-      "g",
-      "h",
-      "i",
-      "j",
-      "k",
-      "l",
-      "m",
-      "n",
-      "o",
-      "p",
-      "q",
-      "r",
-      "s",
-      "t",
-      "u",
-      "v",
-      "w",
-      "x",
-      "y",
-      "z",
-    },
+  position = function(relative)
+    return relative + 1
+  end,
+  exclude = {},
+  include = {
+    "a",
+    "b",
+    "c",
+    "d",
+    "e",
+    "f",
+    "g",
+    "h",
+    "i",
+    "j",
+    "k",
+    "l",
+    "m",
+    "n",
+    "o",
+    "p",
+    "q",
+    "r",
+    "s",
+    "t",
+    "u",
+    "v",
+    "w",
+    "x",
+    "y",
+    "z",
   },
 }
-
-local function finish(self)
-  for _, cb in ipairs(self.finish_callbacks) do
-    cb()
-  end
-end
-
-local function begin(self)
-  for _, cb in ipairs(self.begin_callbacks) do
-    cb()
-  end
-end
 
 local function get_leaf_ancestor_list(leaf, root)
   local ancestor_list = { leaf }
@@ -101,7 +107,7 @@ local function highlight_node(self, leaf, root)
     if leaf.hidden_next_key and i ~= 1 then
       return
     end
-    local col = self.config.label.position(relative_postion, leaf.data.col)
+    local col = self.config.position(relative_postion, leaf.data.col)
     relative_postion = col
     set_extmark({
       buf = leaf.data.buf,
@@ -131,6 +137,8 @@ local function highlight_nodes(self, root)
   run(root)
 end
 
+--- @param self EyeTrack.Label
+--- @param root EyeTrack.Label.Node
 local function active(self, root)
   local function listen()
     local char = vim.fn.getcharstr()
@@ -138,9 +146,8 @@ local function active(self, root)
     self:clear_ns_id()
 
     if not root or root.children[char] == nil then
-      finish(self)
       util.callback_option(self.config.unmatched, key)
-      util.callback_option(self.config.on_key, {
+      util.callback_option(self.config.finish, {
         matched = nil,
         label = key,
       })
@@ -148,9 +155,8 @@ local function active(self, root)
       local node = root.children[char]
       if node.level == 0 then
         util.callback_option(node.matched and node.matched or self.config.matched, node.data)
-        finish(self)
         util.callback_option(
-          self.config.on_key,
+          self.config.finish,
           vim.tbl_deep_extend("force", {
             matched = true,
           }, node.data)
@@ -165,6 +171,7 @@ local function active(self, root)
   listen()
 end
 
+--- @return string|nil
 local function get_random_label(include, node)
   if node.remain == 0 then
     return
@@ -200,10 +207,14 @@ local function compute(include, total)
   return compute_run(1)
 end
 
+--- @param parent EyeTrack.Label.Node
+--- @param label string|nil
+--- @return EyeTrack.Label.Leaf|nil
 local function register_leaf(parent, label)
   if not label then
     return
   end
+
   local node = {
     level = 0,
     label = label,
@@ -215,15 +226,20 @@ local function register_leaf(parent, label)
   return node
 end
 
+--- @param self EyeTrack.Label
+--- @param parent EyeTrack.Label.Node
+--- @param label string|nil
+--- @return EyeTrack.Label.Node|nil
 local function register_node(self, parent, label)
-  if not label then
+  if not label or label == "" then
     return
   end
+  --- @type EyeTrack.Label.Node
   local node = {
     level = parent.level - 1,
     label = label,
     parent = parent,
-    remain = #self.config.label.include,
+    remain = #self.config.include,
     children = {},
     id = parent.id .. (#vim.tbl_keys(parent.children) + 1),
   }
@@ -239,25 +255,25 @@ function M:clear_ns_id()
   end
 end
 
+--- @param self EyeTrack.Label
+--- @param node EyeTrack.Label.Node
 --- @param label EyeTrack.LabelSpec
-function M:_register(node, label)
+local function register(self, node, label)
   if not node then
     return
   end
-
   local function transfer()
     if node.parent then
       node.parent.current = nil
-      self:_register(node.parent, label)
+      register(self, node.parent, label)
     end
   end
-
   if node.level == 1 then
     if node.remain == 0 then
       transfer()
       return
     end
-    local leaf = register_leaf(node, get_random_label(self.config.label.include, node))
+    local leaf = register_leaf(node, get_random_label(self.config.include, node))
     label.buf = label.buf or vim.api.nvim_get_current_buf()
     self.bufs[tostring(label.buf)] = true
     leaf.matched = label.matched
@@ -272,65 +288,25 @@ function M:_register(node, label)
     }
   else
     if node.current then
-      self:_register(node.current, label)
+      register(self, node.current, label)
       return
     end
     if node.remain == 0 then
       transfer()
       return
     end
-    node.current = register_node(self, node, get_random_label(self.config.label.include, node))
-    self:_register(node.current, label)
+    node.current = register_node(self, node, get_random_label(self.config.include, node))
+    register(self, node.current, label)
   end
 end
 
 --- @param label EyeTrack.LabelSpec
 function M:register(label)
-  self:_register(self.root, label)
-end
-
---- @param labels EyeTrack.LabelSpec[]
---- @param config? EyeTrack.Config
-function M:init(labels, config)
-  config = config or {}
-  self.labels = labels
-  self.config = {
-    matched = config.matched,
-    unmatched = config.unmatched,
-    on_key = config.on_key,
-    label = vim.tbl_deep_extend("force", default_config.label, config.label or {}),
-  }
-  local include = {}
-  for _, label in ipairs(self.config.label.include) do
-    if not vim.list_contains(self.config.label.exclude, label) then
-      table.insert(include, label)
-    end
-  end
-  self.config.label.include = include
-
-  local level, remain1, remain2 = compute(self.config.label.include, #labels)
-  self.root = {
-    id = "0",
-    level = level + 1,
-    remain = remain2 + 1,
-    children = {},
-  }
-  self.bufs = {}
-  self.ns_id = vim.api.nvim_create_namespace("eye-track-namespace")
-  self.finish_callbacks = {}
-  self.begin_callbacks = {}
-  self.root.current = register_node(self, self.root, "[[root]]")
-  self.root.current.label = nil
-  self.root.current.remain = remain1
-  setmetatable(self.root.children, { __index = self.root.children["[[root]]"].children })
-  require("eye-track.core.layer").access(config.layer, function(b, f)
-    table.insert(self.begin_callbacks, b)
-    table.insert(self.finish_callbacks, f)
-  end)
+  register(self, self.root, label)
 end
 
 function M:active()
-  begin(self)
+  util.callback_option(self.config.start)
   active(self, self.root)
 end
 
@@ -341,14 +317,47 @@ function M:main()
   self:active()
 end
 
+--- @param self EyeTrack.Label
+--- @param labels EyeTrack.LabelSpec[]
+--- @param config? EyeTrack.Label.Config
+local function init(self, labels, config)
+  config = config or {}
+  self.labels = labels
+  self.config = vim.tbl_deep_extend("force", default_config, config or {})
+  local include = {}
+  for _, label in ipairs(self.config.include) do
+    if not vim.list_contains(self.config.exclude, label) then
+      table.insert(include, label)
+    end
+  end
+  self.config.include = include
+
+  local level, remain1, remain2 = compute(self.config.include, #labels)
+  --- @type EyeTrack.Label.Node
+  self.root = {
+    id = "0",
+    level = level + 1,
+    remain = remain2 + 1,
+    children = {},
+  }
+  self.bufs = {}
+  self.ns_id = vim.api.nvim_create_namespace("eye-track-namespace")
+  self.root.current = register_node(self, self.root, "[[root]]")
+  self.root.current.label = nil
+  self.root.current.remain = remain1
+  setmetatable(self.root.children, { __index = self.root.children["[[root]]"].children })
+end
+
 --- @param labels table<EyeTrack.LabelSpec>
---- @param config? EyeTrack.Config
---- @return EyeTrack.Key
+--- @param config? EyeTrack.Label.Config
+--- @return EyeTrack.Label
 function M:new(labels, config)
+  --- @type EyeTrack.Label
+  ---@diagnostic disable-next-line: missing-fields
   local o = {}
   setmetatable(o, self)
   self.__index = self
-  self.init(o, labels, config)
+  init(o, labels, config)
   return o
 end
 

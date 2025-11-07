@@ -10,12 +10,14 @@ local M = {}
 --- @field buf? integer
 
 --- @class EyeTrack.Keyword.Match
+--- @field row number
 --- @field start_col number
 --- @field end_col number
 --- @field start_virt_col number
 --- @field end_virt_col number
 --- @field start_virt_win_col number
 --- @field end_virt_win_col number
+--- @field capture? string
 
 local BUILTINKEYWORDMAP = {
   ["word_inner"] = "\\k\\+",
@@ -45,25 +47,19 @@ local function get_display_width(buf, start_row, start_col, end_row, end_col)
   return display_width
 end
 
-function M:match()
-  for i = self.topline, self.botline do
-    self:get_keyword(i, self.leftcol, self.rightcol)
-  end
-end
-
-function M:collect_keyword(i, start_col, end_col, current_line)
-  local start_virt_col = get_display_width(self.buf, i - 1, 0, i - 1, start_col)
-  local end_virt_col = get_display_width(self.buf, i - 1, 0, i - 1, end_col) - 1
+local function collect_keyword(self, row, start_col, end_col, current_line)
+  local start_virt_col = get_display_width(self.buf, row - 1, 0, row - 1, start_col)
+  local end_virt_col = get_display_width(self.buf, row - 1, 0, row - 1, end_col) - 1
 
   --- @type EyeTrack.Keyword.Match
   local match = {
+    row = row,
     start_col = start_col,
     end_col = end_col,
     start_virt_col = start_virt_col,
     end_virt_col = end_virt_col,
     start_virt_win_col = start_virt_col - self.leftcol,
     end_virt_win_col = end_virt_col - self.leftcol,
-    row = i,
   }
   if self.should_capture then
     match.capture = current_line:sub(start_col + 1, end_col)
@@ -71,7 +67,7 @@ function M:collect_keyword(i, start_col, end_col, current_line)
   table.insert(self.matches[#self.matches], match)
 end
 
-function M:get_keyword(i, leftcol, rightcol)
+local function get_keyword(self, i, leftcol, rightcol)
   table.insert(self.matches, {})
   local start_pos = 0
 
@@ -87,31 +83,37 @@ function M:get_keyword(i, leftcol, rightcol)
     local end_col = end_ + start_pos
 
     if end_col > leftcol then
-      self:collect_keyword(i, start_col, end_col, current_line)
+      collect_keyword(self, i, start_col, end_col, current_line)
     end
 
     start_pos = start_pos + end_
   end
 end
 
---- @param opts EyeTrack.Keyword.Options
-function M:init(opts)
-  self.topline = opts.topline
-  self.botline = opts.botline
-  self.leftcol = opts.leftcol
-  self.rightcol = opts.rightcol
+local function match(self)
+  for i = self.topline, self.botline do
+    get_keyword(self, i, self.leftcol, self.rightcol)
+  end
+end
+
+--- @param options EyeTrack.Keyword.Options
+function M:init(options)
+  self.topline = options.topline
+  self.botline = options.botline
+  self.leftcol = options.leftcol
+  self.rightcol = options.rightcol
 
   --- @type table<EyeTrack.Keyword.Match>
   self.matches = {}
-  self.buf = opts.buf or vim.api.nvim_get_current_buf()
-  self.regex = vim.regex(get_pattern(opts.keyword))
+  self.buf = options.buf or vim.api.nvim_get_current_buf()
+  self.regex = vim.regex(get_pattern(options.keyword))
 end
 
---- @param opts EyeTrack.Keyword.Options
---- @return table<EyeTrack.Keyword.Match>
-function M:main(opts)
-  self:init(opts)
-  self:match()
+--- @param options EyeTrack.Keyword.Options
+--- @return EyeTrack.Keyword.Match[]
+function M:main(options)
+  self:init(options)
+  match(self)
   return self.matches
 end
 

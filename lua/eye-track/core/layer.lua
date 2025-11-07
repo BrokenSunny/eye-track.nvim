@@ -1,12 +1,22 @@
+--- @class EyeTrack.Layer
 local M = {}
+
+--- @class EyeTrack.Layer.Highlight
+--- @field start_pos [integer, integer]
+--- @field end_pos [integer, integer]
+--- @field hl_group string
+
+--- @class EyeTrack.Layer.Config
+--- @field enable? boolean
+--- @field highlight? fun(ctx: any): EyeTrack.Layer.Highlight[]
 
 local Comment = vim.api.nvim_get_hl(0, { name = "Comment" })
 vim.api.nvim_set_hl(0, "EyeTrackLayer", {
   fg = Comment.fg,
 })
 
---- @type EyeTrack.Layer
-local default = {
+--- @type EyeTrack.Layer.Config
+local default_config = {
   enable = true,
   highlight = function()
     local wininfo = vim.fn.getwininfo(vim.api.nvim_get_current_win())[1]
@@ -28,39 +38,32 @@ local function hl(data)
   })
 end
 
-function M:draw()
-  if not self.config.enable then
+--- @param config? EyeTrack.Layer.Config
+function M.draw(config)
+  config = vim.tbl_deep_extend("force", default_config, config or {})
+  if not config.enable then
     return
   end
-  local highlight = self.config.highlight
+  if M.ns_id then
+    return
+  end
+  M.ns_id = vim.api.nvim_create_namespace("eye-track-layer")
+  local highlight = config.highlight
   if type(highlight) ~= "function" then
     return
   end
   for _, v in ipairs(highlight()) do
-    v.ns_id = self.ns_id
+    v.ns_id = M.ns_id
     hl(v)
   end
 end
 
-function M:clear()
-  if self.ns_id ~= nil then
-    vim.api.nvim_buf_clear_namespace(0, self.ns_id, 0, -1)
-    self.ns_id = nil
-  end
-end
-
---- @type fun(config?: EyeTrack.Layer, callback: any)
-function M.access(config, callback)
-  M.config = vim.tbl_deep_extend("force", default, config or {})
-  if not M.config.enable then
+function M.clear()
+  if not M.ns_id then
     return
   end
-  callback(function()
-    M.ns_id = vim.api.nvim_create_namespace("eye-track-layer")
-    M:draw()
-  end, function()
-    M:clear()
-  end)
+  vim.api.nvim_buf_clear_namespace(0, M.ns_id, 0, -1)
+  M.ns_id = nil
 end
 
 return M

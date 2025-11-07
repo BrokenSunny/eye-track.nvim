@@ -1,5 +1,4 @@
-local M = {}
-local State = require("eye-track.test.state")
+local State = require("eye-track.plugins.search.state")
 
 --- @param matches table<EyeTrack.Keyword.Match>
 local function general_iter(win, matches, topline, botline, callback)
@@ -40,9 +39,9 @@ end
 
 local function rollback_state(pattern)
   local state = State:query(pattern)
-  if state and state.Key then
+  if state and state.Label then
     vim.notify(pattern)
-    state.Key:active()
+    state.Label:active()
     return true
   end
 end
@@ -59,7 +58,7 @@ local function match_text(buf, topline, botline, leftcol, rightcol, pattern, cal
   general_iter(0, matches, topline, botline, callback)
 end
 
-function M.main()
+local function main()
   local win = vim.api.nvim_get_current_win()
   local buf = vim.api.nvim_get_current_buf()
   local wininfo = vim.fn.getwininfo(win)[1]
@@ -107,17 +106,24 @@ function M.main()
     return labels
   end
 
+  local Layer = require("eye-track.core.layer")
+
   local function step(pattern)
     local exclude = {}
     local labels = create_labels(pattern, exclude)
-    local Key = require("eye-track.core.key"):new(labels, {
-      label = { exclude = exclude },
-      on_key = function(ctx)
+    local Label = require("eye-track.core.label"):new(labels, {
+      exclude = exclude,
+      start = function()
+        Layer.draw()
+      end,
+      finish = function(ctx)
         if ctx.matched then
           vim.api.nvim_win_set_cursor(0, { ctx.line + 1, ctx.data.start_col })
+          Layer.clear()
           return
         end
         if ctx.label:lower() == "<esc>" then
+          Layer.clear()
           return
         end
         local next_pattern
@@ -134,10 +140,10 @@ function M.main()
         step(next_pattern)
       end,
     })
-    State:register(pattern, Key)
-    Key:main()
+    State:register(pattern, Label)
+    Label:main()
   end
   step("")
 end
 
-return M
+return main
