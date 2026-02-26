@@ -45,6 +45,8 @@ local function main(options)
 					row = row,
 					col = cursor[2],
 					offset = cursor[1] - row,
+					topline = topline,
+					botline = botline,
 				},
 			})
 		end
@@ -67,6 +69,8 @@ local function main(options)
 					row = row,
 					col = c,
 					offset = cursor[1] - row,
+					topline = topline,
+					botline = botline,
 				},
 			}
 			table.insert(labels, label)
