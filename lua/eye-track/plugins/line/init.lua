@@ -44,7 +44,7 @@ local function main(options)
 				data = {
 					row = row,
 					col = cursor[2],
-					offset = cursor[1] - row,
+					offset = row - cursor[1],
 					topline = topline,
 					botline = botline,
 				},
@@ -68,7 +68,7 @@ local function main(options)
 				data = {
 					row = row,
 					col = c,
-					offset = cursor[1] - row,
+					offset = row - cursor[1],
 					topline = topline,
 					botline = botline,
 				},
