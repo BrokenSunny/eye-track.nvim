@@ -43,7 +43,7 @@ local function main(opts)
 		local win = data.win
 		local buf = data.buf
 		local matches = data.matches
-		local wininfo = vim.fn.getwininfo(win)[1]
+
 		general_iter(win, matches, data.topline, data.botline, function(match)
 			local ctx = {
 				match = match,
@@ -66,7 +66,7 @@ local function main(opts)
 			local label = {
 				buf = buf,
 				line = match.row - 1,
-				col = col - wininfo.leftcol,
+				col = col,
 				data = vim.tbl_deep_extend("force", {
 					win = win,
 					buf = buf,

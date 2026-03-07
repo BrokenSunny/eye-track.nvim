@@ -55,7 +55,6 @@ local function main(options)
 			local width = wininfo.width - wininfo.textoff
 			label.col = math.min(#line - 1, leftcol + width - 1)
 		end
-		label.col = label.col - wininfo.leftcol
 	end)
 	local Layer = require("eye-track.core.layer")
 	require("eye-track.core").main(labels, {

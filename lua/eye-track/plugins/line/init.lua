@@ -38,18 +38,18 @@ local function main(options)
 	local callback
 	if virtualedit == "all" then
 		callback = function(row)
-			local line = vim.api.nvim_buf_get_lines(0, row - 1, row, false)[1]
-			local col = vim.fn.virtcol2col(vim.api.nvim_get_current_win(), row, virt_col)
-			if vim.fn.strdisplaywidth(line) < virt_col then
-				col = virt_col
+			local _col = vim.fn.virtcol2col(vim.api.nvim_get_current_win(), row, virt_col) - 1
+			if _col < 0 then
+				_col = 0
 			end
-			col = col - wininfo.leftcol
+			local col = virt_col - wininfo.leftcol - 1
 			table.insert(labels, {
 				line = row - 1,
+				virt = true,
 				col = col,
 				data = {
 					row = row,
-					col = cursor[2],
+					col = _col,
 					offset = row - cursor[1],
 					topline = topline,
 					botline = botline,
@@ -59,13 +59,13 @@ local function main(options)
 	elseif virtualedit == "none" then
 		callback = function(row)
 			local line = vim.api.nvim_buf_get_lines(0, row - 1, row, false)[1]
-			local col
-			local c = virt_col - 1
+			local _col = vim.fn.virtcol2col(vim.api.nvim_get_current_win(), row, virt_col) - 1
+			if _col < 0 then
+				_col = 0
+			end
+			local col = virt_col - 1
 			if vim.fn.strdisplaywidth(line) < virt_col then
-				col = #line - 1
-				c = #line
-			else
-				col = virt_col - 1
+				col = vim.fn.strdisplaywidth(line) - 1
 			end
 			col = col - wininfo.leftcol
 			if col < 0 then
@@ -73,10 +73,11 @@ local function main(options)
 			end
 			local label = {
 				line = row - 1,
+				virt = true,
 				col = col,
 				data = {
 					row = row,
-					col = c,
+					col = _col,
 					offset = row - cursor[1],
 					topline = topline,
 					botline = botline,

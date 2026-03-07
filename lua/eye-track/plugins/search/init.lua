@@ -80,7 +80,7 @@ local function main(options)
 		local label = {
 			buf = buf,
 			line = match.row - 1,
-			col = match.end_col - offset - wininfo.leftcol,
+			col = match.end_col - offset,
 			data = vim.tbl_deep_extend("force", match, {
 				end_col = match.end_col - offset - 1,
 			}),

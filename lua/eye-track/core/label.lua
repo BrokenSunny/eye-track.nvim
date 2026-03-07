@@ -76,12 +76,17 @@ local function set_extmark(options)
 	local line = options.line
 	local col = options.col
 	local ns_id = options.ns_id
-	pcall(vim.api.nvim_buf_set_extmark, options.buf, ns_id, line, 0, {
+	local extmark_opts = {
 		virt_text_pos = "overlay",
 		virt_text = { { options.text, options.hl_group } },
-		virt_text_win_col = col,
 		hl_mode = "combine",
-	})
+	}
+	if options.virt then
+		extmark_opts.virt_text_win_col = col
+		pcall(vim.api.nvim_buf_set_extmark, options.buf, ns_id, line, 0, extmark_opts)
+	else
+		pcall(vim.api.nvim_buf_set_extmark, options.buf, ns_id, line, col, extmark_opts)
+	end
 end
 
 local function highlight_node(self, leaf, root)
@@ -112,6 +117,7 @@ local function highlight_node(self, leaf, root)
 		set_extmark({
 			buf = leaf.data.buf,
 			line = leaf.data.line,
+			virt = leaf.data.virt,
 			col = col,
 			ns_id = self.ns_id,
 			hl_group = highlight.hl_group[i] or highlight.hl_group[#highlight.hl_group],
@@ -292,6 +298,7 @@ local function register(self, node, label)
 			label = leaf.label,
 			data = label.data,
 			buf = label.buf,
+			virt = label.virt,
 		}
 	else
 		if node.current then

@@ -8,6 +8,7 @@ local Label = require("eye-track.core.label")
 --- @class EyeTrack.LabelSpec
 --- @field line integer
 --- @field col integer
+--- @field virt? boolean
 --- @field matched? fun(ctx: any)
 --- @field highlight? EyeTrack.LabelSpec.Highlight
 --- @field buf? integer
@@ -26,7 +27,7 @@ local Label = require("eye-track.core.label")
 --- @param labels EyeTrack.LabelSpec[]
 --- @param config? EyeTrack.Label.Config
 function M.main(labels, config)
-  Label:new(labels, config):main()
+	Label:new(labels, config):main()
 end
 
 return M
