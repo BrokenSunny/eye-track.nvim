@@ -76,10 +76,10 @@ local function set_extmark(options)
 	local line = options.line
 	local col = options.col
 	local ns_id = options.ns_id
-	pcall(vim.api.nvim_buf_set_extmark, options.buf, ns_id, line, col, {
+	pcall(vim.api.nvim_buf_set_extmark, options.buf, ns_id, line, 0, {
 		virt_text_pos = "overlay",
 		virt_text = { { options.text, options.hl_group } },
-		end_col = col,
+		virt_text_win_col = col,
 		hl_mode = "combine",
 	})
 end
