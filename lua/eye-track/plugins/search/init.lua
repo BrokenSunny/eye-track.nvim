@@ -37,10 +37,17 @@ local function general_iter(win, matches, topline, botline, callback)
 	end
 end
 
+local function notify(msg)
+	vim.api.nvim_echo({
+		{ "󰐰 ", "EyeTrackSearchIcon" },
+		{ msg, "WarningMsg" },
+	}, false, {})
+end
+
 local function rollback_state(pattern)
 	local state = State:query(pattern)
 	if state and state.Label then
-		vim.notify(pattern)
+		notify(pattern)
 		state.Label:active()
 		return true
 	end
@@ -59,6 +66,7 @@ local function match_text(buf, topline, botline, leftcol, rightcol, pattern, cal
 end
 
 local function main(options)
+	require("eye-track.core").refresh_highlights()
 	local win = vim.api.nvim_get_current_win()
 	local buf = vim.api.nvim_get_current_buf()
 	local wininfo = vim.fn.getwininfo(win)[1]
@@ -138,7 +146,7 @@ local function main(options)
 				if rollback_state(next_pattern) then
 					return
 				end
-				vim.notify(next_pattern)
+				notify(next_pattern)
 				step(next_pattern)
 			end,
 		})

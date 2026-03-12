@@ -27,7 +27,23 @@ local Label = require("eye-track.core.label")
 --- @param labels EyeTrack.LabelSpec[]
 --- @param config? EyeTrack.Label.Config
 function M.main(labels, config)
+	M.refresh_highlights()
 	Label:new(labels, config):main()
+end
+
+function M.refresh_highlights()
+	vim.api.nvim_set_hl(0, "EyeTrackKey", {
+		fg = "#ff007c",
+		bold = true,
+	})
+	vim.api.nvim_set_hl(0, "EyeTrackNextKey", {
+		fg = "#00dfff",
+		bold = true,
+	})
+	vim.api.nvim_set_hl(0, "EyeTrackSearchIcon", {
+		fg = "#ff007c",
+		bold = true,
+	})
 end
 
 return M

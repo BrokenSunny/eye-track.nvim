@@ -165,6 +165,7 @@ local function active(self, root)
 				label = key,
 				matched = nil,
 			})
+			vim.cmd.redraw()
 		else
 			local node = root.children[char]
 			if node.level == 0 then

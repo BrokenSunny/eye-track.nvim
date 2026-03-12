@@ -25,8 +25,15 @@ end
 
 local function main(options)
 	local wininfo = vim.fn.getwininfo(vim.api.nvim_get_current_win())[1]
+
 	local topline = wininfo.topline
 	local botline = wininfo.botline
+	if options.range and type(options.range) == "function" then
+		local range = options.range({ topline = topline, botline = botline })
+		topline = range[1]
+		botline = range[2]
+	end
+
 	local virt_col = vim.fn.virtcol(".")
 	local cursor = vim.api.nvim_win_get_cursor(0)
 
