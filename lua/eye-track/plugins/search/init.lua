@@ -133,6 +133,9 @@ local function main(options)
 					return
 				end
 				if ctx.label:lower() == "<esc>" then
+					if type(options.unmatched) == "function" then
+						options.unmatched(ctx)
+					end
 					Layer.clear()
 					return
 				end

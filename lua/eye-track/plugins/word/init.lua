@@ -42,8 +42,10 @@ end
 
 --- @class EyeTrack.Plugin.Word.Options
 --- @field keyword string | fun(BuiltinKeyword: table): string
+--- @field range? fun(range: EyeTrack.Range): [integer, integer]
 --- @field filter? fun(match: EyeTrack.Keyword.Match): boolean
 --- @field matched fun(ctx: any)
+--- @field unmatched? fun(ctx: any)
 --- @field hl_group? string | fun(match: EyeTrack.Keyword.Match): string
 --- @field condition? fun(matchs: EyeTrack.Keyword.Match[]): boolean
 --- @field label EyeTrack.Plugin.Word.Label
@@ -51,7 +53,10 @@ end
 --- @param opts EyeTrack.Plugin.Word.Options
 local function main(opts)
 	local labels = {}
-	local data = require("eye-track.keyword.general")(opts.keyword)[1]
+	local data = require("eye-track.keyword.general")({
+		keyword = opts.keyword,
+		range = opts.range,
+	})[1]
 	local filter = type(opts.filter) == "function" and opts.filter or function()
 		return false
 	end
@@ -127,6 +132,11 @@ local function main(opts)
 		end,
 		matched = function(ctx)
 			opts.matched(ctx)
+		end,
+		unmatched = function(ctx)
+			if type(opts.unmatched) == "function" then
+				opts.unmatched(ctx)
+			end
 		end,
 	})
 end

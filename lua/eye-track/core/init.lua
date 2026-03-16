@@ -1,6 +1,10 @@
 local M = {}
 local Label = require("eye-track.core.label")
 
+--- @class EyeTrack.Range
+--- @field topline integer
+--- @field botline integer
+
 --- @class EyeTrack.LabelSpec.Highlight
 --- @field hl_group? string[] | fun(ctx: any): string[]
 --- @field append_highlights? fun(any)[]
