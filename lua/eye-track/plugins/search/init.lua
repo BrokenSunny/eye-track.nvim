@@ -65,7 +65,15 @@ local function match_text(buf, topline, botline, leftcol, rightcol, pattern, cal
   general_iter(0, matches, topline, botline, callback)
 end
 
-local function main(options)
+--- @class EyeTrack.Plugin.Search.MatchContext: EyeTrack.Keyword.Match
+--- @field label string
+
+--- @class EyeTrack.Plugin.Search.Config
+--- @field matched fun(ctx: EyeTrack.Plugin.Search.MatchContext)
+--- @field unmatched fun(ctx: EyeTrack.Plugin.Search.MatchContext)
+
+--- @param config EyeTrack.Plugin.Search.Config
+local function main(config)
   require("eye-track.core").refresh_highlights()
   local win = vim.api.nvim_get_current_win()
   local buf = vim.api.nvim_get_current_buf()
@@ -85,22 +93,22 @@ local function main(options)
       table.insert(exclude, last_char)
       offset = #last_char
     end
+    ---@type EyeTrack.LabelSpec
     local label = {
       buf = buf,
-      line = match.row - 1,
-      col = match.end_col - offset,
+      labels = {
+        { row = match.row - 1, col = match.end_col - offset },
+      },
       data = vim.tbl_deep_extend("force", match, {
         end_col = match.end_col - offset - 1,
       }),
       highlight = {
-        append_highlights = {
-          function(ns_id)
-            vim.api.nvim_buf_set_extmark(buf, ns_id, match.row - 1, match.start_col, {
-              end_col = match.end_col - offset,
-              hl_group = "Visual",
-            })
-          end,
-        },
+        HighlightPre = function(ns_id)
+          vim.api.nvim_buf_set_extmark(buf, ns_id, match.row - 1, match.start_col, {
+            end_col = match.end_col - offset,
+            hl_group = "Visual",
+          })
+        end,
       },
     }
     return label
@@ -128,13 +136,15 @@ local function main(options)
       end,
       finish = function(ctx)
         if ctx.matched then
-          options.matched(ctx)
+          local context = ctx.data
+          context.label = context.label
+          config.matched(context)
           Layer.clear()
           return
         end
         if ctx.label:lower() == "<esc>" then
-          if type(options.unmatched) == "function" then
-            options.unmatched(ctx)
+          if type(config.unmatched) == "function" then
+            config.unmatched(ctx)
           end
           Layer.clear()
           return
@@ -142,6 +152,8 @@ local function main(options)
         local next_pattern
         if ctx.label:lower() == "<bs>" then
           next_pattern = vim.fn.strcharpart(pattern, 0, vim.fn.strcharlen(pattern) - 1)
+        elseif ctx.label:lower() == "<cr>" then
+          next_pattern = pattern
         else
           local label = ctx.label:lower() == "<space>" and " " or ctx.label
           next_pattern = pattern .. label

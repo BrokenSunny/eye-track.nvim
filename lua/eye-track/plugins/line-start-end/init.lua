@@ -23,7 +23,17 @@ local function iter_line(cursor_row, topline, botline, callback)
   end
 end
 
-local function main(options)
+---@class EyeTrack.Plugin.LineStartEnd.Context
+---@field row number
+---@field col number
+---@field label string
+
+---@class EyeTrack.Plugin.LineStartEnd.Config
+---@field position -1 | -2 | 0 | 1 | 2
+---@field matched fun(ctx: EyeTrack.Plugin.LineStartEnd.Context)
+
+--- @param config EyeTrack.Plugin.LineStartEnd.Config
+local function main(config)
   local wininfo = vim.fn.getwininfo(vim.api.nvim_get_current_win())[1]
   local topline = wininfo.topline
   local botline = wininfo.botline
@@ -34,27 +44,28 @@ local function main(options)
   local labels = {}
   iter_line(cursor[1], topline, botline, function(row)
     local line = vim.api.nvim_buf_get_lines(0, row - 1, row, false)[1] or ""
-    local label = {
-      line = row - 1,
-      data = {
-        row = row,
-      },
-    }
-    table.insert(labels, label)
-    if options.position == -1 then
+    local col
+    if config.position == -1 then
       local f = line:find("%S") or 1
-      label.col = math.max(f - 1, 0)
-    elseif options.position == -2 then
-      label.col = 0
-    elseif options.position == 0 then
-    elseif options.position == 1 then
+      col = math.max(f - 1, 0)
+    elseif config.position == -2 then
+      col = 0
+    elseif config.position == 0 then
+    elseif config.position == 1 then
       local width = wininfo.width - wininfo.textoff
       local l = line:gsub("%s*$", "")
-      label.col = math.min(#l - 1, leftcol + width - 1)
-    elseif options.position == 2 then
+      col = math.min(#l - 1, leftcol + width - 1)
+    elseif config.position == 2 then
       local width = wininfo.width - wininfo.textoff
-      label.col = math.min(#line - 1, leftcol + width - 1)
+      col = math.min(#line - 1, leftcol + width - 1)
     end
+    labels[#labels + 1] = {
+      labels = { { row = row - 1, col = col } },
+      data = {
+        row = row,
+        col = col,
+      },
+    }
   end)
   local Layer = require("eye-track.core.layer")
   require("eye-track.core").main(labels, {
@@ -64,7 +75,11 @@ local function main(options)
     finish = function()
       Layer.clear()
     end,
-    matched = options.matched,
+    matched = function(ctx)
+      local context = ctx.data
+      context.label = context.label
+      config.matched(context)
+    end,
   })
 end
 

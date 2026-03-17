@@ -7,10 +7,7 @@
 --- @field label? string
 
 --- @class EyeTrack.Label.Leaf: EyeTrack.Label.Node
---- @field matched? fun(ctx: any)
---- @field highlight? EyeTrack.LabelSpec.Highlight
---- @field hidden_next_key? boolean
---- @field data? any
+--- @field spec EyeTrack.LabelSpec
 
 --- @class EyeTrack.Label
 --- @field config EyeTrack.Label.Config
@@ -23,9 +20,11 @@ local util = require("eye-track.core.util")
 
 --- @type EyeTrack.Label.Config
 local default_config = {
-  position = function(relative)
-    return relative + 1
-  end,
+  sublabel = {
+    relative_position = function(relative)
+      return { row = relative.row, col = relative.col + 1 }
+    end,
+  },
   exclude = {},
   include = {
     "a",
@@ -57,7 +56,11 @@ local default_config = {
   },
 }
 
+--- @param leaf EyeTrack.Label.Leaf
+--- @param root EyeTrack.Label.Node
+--- @return EyeTrack.Label.Node[]
 local function get_leaf_ancestor_list(leaf, root)
+  --- @type EyeTrack.Label.Node[]
   local ancestor_list = { leaf }
   local node = leaf.parent
   while node do
@@ -77,52 +80,66 @@ local function set_extmark(options)
   local col = options.col
   local ns_id = options.ns_id
   local extmark_opts = {
-    virt_text_pos = "overlay",
+    virt_text_pos = options.virt_text_pos or "overlay",
     virt_text = { { options.text, options.hl_group } },
     hl_mode = "combine",
   }
   if options.virt then
     extmark_opts.virt_text_win_col = col
-    pcall(vim.api.nvim_buf_set_extmark, options.buf, ns_id, line, 0, extmark_opts)
+    vim.api.nvim_buf_set_extmark(options.buf, ns_id, line, 0, extmark_opts)
   else
-    pcall(vim.api.nvim_buf_set_extmark, options.buf, ns_id, line, col, extmark_opts)
+    vim.api.nvim_buf_set_extmark(options.buf, ns_id, line, col, extmark_opts)
   end
 end
 
-local function highlight_node(self, leaf, root)
-  local ancestor_list = get_leaf_ancestor_list(leaf, root)
-  local relative_postion = leaf.data.col - 1
-
-  local highlight = leaf.highlight
+--- @param highlight EyeTrack.LabelSpec.Highlight
+local function normalize_highlight(highlight)
   if type(highlight.hl_group) == "function" then
     highlight.hl_group = highlight.hl_group({})
   end
   if type(highlight.hl_group) ~= "table" then
     highlight.hl_group = { "EyeTrackKey", "EyeTrackNextKey" }
   end
+  return highlight
+end
+
+--- @param self EyeTrack.Label
+--- @param leaf EyeTrack.Label.Leaf
+--- @param root EyeTrack.Label.Node
+local function highlight_node(self, leaf, root)
+  local ancestor_list = get_leaf_ancestor_list(leaf, root)
+  local highlight = normalize_highlight(leaf.spec.highlight or {})
+  local relative_postion = { row = 0, col = -1 }
 
   local function hl(i, node)
-    if node.level == 0 then
-      if type(highlight.append_highlights) == "table" then
-        for _, cb in ipairs(highlight.append_highlights) do
-          util.callback_option(cb, self.ns_id)
-        end
+    for index, label in ipairs(leaf.spec.labels) do
+      if index == 1 then
+        relative_postion = self.config.sublabel.relative_position(relative_postion, {
+          row = label.row,
+          col = label.col,
+        })
       end
+      if node.level == 0 then
+        util.callback_option(highlight.HighlightPre, self.ns_id)
+      end
+
+      if leaf.spec.hidden_next_key and i ~= 1 then
+        return
+      end
+
+      local row = label.row + relative_postion.row
+      local col = label.col + relative_postion.col
+      set_extmark({
+        buf = leaf.spec.buf,
+        line = row,
+        virt = leaf.spec.virt,
+        virt_text_pos = leaf.spec.virt_text_pos,
+        col = col,
+        ns_id = self.ns_id,
+        hl_group = highlight.hl_group[i] or highlight.hl_group[#highlight.hl_group],
+        text = node.label,
+      })
     end
-    if leaf.hidden_next_key and i ~= 1 then
-      return
-    end
-    local col = self.config.position(relative_postion, leaf.data.col)
-    relative_postion = col
-    set_extmark({
-      buf = leaf.data.buf,
-      line = leaf.data.line,
-      virt = leaf.data.virt,
-      col = col,
-      ns_id = self.ns_id,
-      hl_group = highlight.hl_group[i] or highlight.hl_group[#highlight.hl_group],
-      text = node.label,
-    })
   end
 
   for i, node in ipairs(ancestor_list) do
@@ -143,13 +160,25 @@ local function highlight_nodes(self, root)
   run(root)
 end
 
-local function finish(self, ctx)
+--- @param leaf EyeTrack.Label.Leaf |nil
+local function finish(self, leaf, ctx)
   if ctx.matched then
-    util.callback_option(self.config.matched, ctx)
+    local matched = leaf and leaf.spec.matched
+    matched = matched or self.config.matched
+    util.callback_option(matched, ctx)
   else
     util.callback_option(self.config.unmatched, ctx)
   end
   util.callback_option(self.config.finish, ctx)
+end
+
+--- @param leaf EyeTrack.Label.Leaf
+local function create_context(leaf)
+  return {
+    label = leaf.label,
+    labels = leaf.spec.labels,
+    data = leaf.spec.data,
+  }
 end
 
 --- @param self EyeTrack.Label
@@ -161,7 +190,7 @@ local function active(self, root)
     self:clear_ns_id()
 
     if not root or root.children[char] == nil then
-      finish(self, {
+      finish(self, nil, {
         label = key,
         matched = nil,
       })
@@ -169,12 +198,10 @@ local function active(self, root)
     else
       local node = root.children[char]
       if node.level == 0 then
-        finish(
-          self,
-          vim.tbl_deep_extend("force", {
-            matched = true,
-          }, node.data)
-        )
+        local leaf = node --[[@as EyeTrack.Label.Leaf]]
+        local ctx = create_context(leaf)
+        ctx.matched = true
+        finish(self, leaf, ctx)
       else
         active(self, node)
       end
@@ -290,16 +317,15 @@ local function register(self, node, label)
     local leaf = register_leaf(node, get_random_label(self.config.include, node))
     label.buf = label.buf or vim.api.nvim_get_current_buf()
     self.bufs[tostring(label.buf)] = true
-    leaf.matched = label.matched
-    leaf.highlight = label.highlight or {}
-    leaf.hidden_next_key = label.hidden_next_key
-    leaf.data = {
-      line = label.line,
-      col = label.col,
-      label = leaf.label,
+    leaf.spec = {
+      matched = label.matched,
+      highlight = label.highlight or {},
+      hidden_next_key = label.hidden_next_key,
       data = label.data,
       buf = label.buf,
       virt = label.virt,
+      virt_text_pos = label.virt_text_pos,
+      labels = label.labels,
     }
   else
     if node.current then
@@ -363,7 +389,7 @@ local function init(self, labels, config)
   setmetatable(self.root.children, { __index = self.root.children["[[root]]"].children })
 end
 
---- @param labels table<EyeTrack.LabelSpec>
+--- @param labels EyeTrack.LabelSpec[]
 --- @param config? EyeTrack.Label.Config
 --- @return EyeTrack.Label
 function M:new(labels, config)

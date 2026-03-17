@@ -35,32 +35,36 @@ local function general_iter(win, matches, topline, botline, callback)
   end
 end
 
---- @class EyeTrack.Plugin.Word.Context
+--- @class EyeTrack.Plugin.Word.Matched.Context: EyeTrack.Keyword.Match
+--- @field buf number
+--- @field win number
+--- @field label string
 
 --- @class EyeTrack.Plugin.Word.Label
 --- @field position -1 | 0 | 1
 
---- @class EyeTrack.Plugin.Word.Options
+--- @class EyeTrack.Plugin.Word.Config
 --- @field keyword string | fun(BuiltinKeyword: table): string
 --- @field range? fun(range: EyeTrack.Range): [integer, integer]
 --- @field filter? fun(match: EyeTrack.Keyword.Match): boolean
---- @field matched fun(ctx: any)
+--- @field matched fun(ctx: EyeTrack.Plugin.Word.Matched.Context)
 --- @field unmatched? fun(ctx: any)
 --- @field hl_group? string | fun(match: EyeTrack.Keyword.Match): string
 --- @field condition? fun(matchs: EyeTrack.Keyword.Match[]): boolean
 --- @field label EyeTrack.Plugin.Word.Label
 
---- @param opts EyeTrack.Plugin.Word.Options
-local function main(opts)
+--- @param config EyeTrack.Plugin.Word.Config
+local function main(config)
+  --- @class EyeTrack.LabelSpec[]
   local labels = {}
   local data = require("eye-track.keyword.general")({
-    keyword = opts.keyword,
-    range = opts.range,
+    keyword = config.keyword,
+    range = config.range,
   })[1]
-  local filter = type(opts.filter) == "function" and opts.filter or function()
+  local filter = type(config.filter) == "function" and config.filter or function()
     return false
   end
-  local condition = type(opts.condition) == "function" and opts.condition or function()
+  local condition = type(config.condition) == "function" and config.condition or function()
     return true
   end
 
@@ -76,7 +80,7 @@ local function main(opts)
     if filter(match) then
       return
     end
-    local hl_group = opts.hl_group
+    local hl_group = config.hl_group
     if type(hl_group) == "function" then
       hl_group = hl_group(match)
     end
@@ -84,39 +88,42 @@ local function main(opts)
       hl_group = ""
     end
     local col
-    if opts.label.position == -1 then
+    if config.label.position == -1 then
       col = match.start_col
-    elseif opts.label.position == 0 then
+    elseif config.label.position == 0 then
       col = math.floor((match.end_col - 1 - match.start_col) / 2) + match.start_col
-    elseif opts.label.position == 1 then
+    elseif config.label.position == 1 then
       col = match.end_col - 1
     end
+    --- @type EyeTrack.LabelSpec
     local label = {
       buf = buf,
-      line = match.row - 1,
-      col = col,
+      labels = {
+        {
+          row = match.row - 1,
+          col = col,
+        },
+      },
+      hidden_next_key = (match.end_col - match.start_col) == 1,
+      highlight = {
+        HighlightPre = function(ns_id)
+          if hl_group == "" then
+            return
+          end
+          vim.api.nvim_buf_set_extmark(buf, ns_id, match.row - 1, match.start_col, {
+            end_col = match.end_col,
+            hl_group = hl_group,
+          })
+        end,
+      },
       data = vim.tbl_deep_extend("force", {
         win = win,
         buf = buf,
       }, match),
-      hidden_next_key = (match.end_col - match.start_col) == 1,
-      highlight = {
-        append_highlights = {
-          function(ns_id)
-            if hl_group == "" then
-              return
-            end
-            vim.api.nvim_buf_set_extmark(buf, ns_id, match.row - 1, match.start_col, {
-              end_col = match.end_col,
-              hl_group = hl_group,
-            })
-          end,
-        },
-      },
     }
 
-    if opts.label and type(opts.label) == "function" then
-      label = opts.label(label)
+    if config.label and type(config.label) == "function" then
+      label = config.label(label)
     end
 
     table.insert(labels, label)
@@ -131,11 +138,13 @@ local function main(opts)
       Layer.clear()
     end,
     matched = function(ctx)
-      opts.matched(ctx)
+      local context = ctx.data
+      context.label = ctx.label
+      config.matched(context)
     end,
     unmatched = function(ctx)
-      if type(opts.unmatched) == "function" then
-        opts.unmatched(ctx)
+      if type(config.unmatched) == "function" then
+        config.unmatched(ctx)
       end
     end,
   })
